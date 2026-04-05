@@ -12,6 +12,7 @@ import Team from './components/Team';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import WhatsAppBroadcast from './components/WhatsAppBroadcast';
+import Settings from './components/Settings';
 
 import Toast from './components/Toast';
 
@@ -21,9 +22,9 @@ import Toast from './components/Toast';
  * SPEED: Lazy component mounting - only render active view
  */
 export default function App() {
-    const { isAuthenticated, currentView, fetchSources, fetchUsers, fetchDueReminders, dueReminders } = useStore();
+    const { isAuthenticated, currentView, fetchSources, fetchUsers, fetchDueReminders, dueReminders, tenant } = useStore();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const notifiedIdsRef = useRef(new Set()); // Track which reminders have been notified
+    const notifiedIdsRef = useRef(new Set());
 
     // Request notification permission and set up reminder checking
     useEffect(() => {
@@ -31,20 +32,18 @@ export default function App() {
             fetchSources();
             fetchUsers();
 
-            // Request notification permission
             if ('Notification' in window && Notification.permission === 'default') {
                 Notification.requestPermission().then(permission => {
                     console.log('Notification permission:', permission);
                 });
             }
 
-            // Check for due reminders every 60 seconds
             const checkReminders = async () => {
                 await fetchDueReminders();
             };
 
-            checkReminders(); // Initial check
-            const intervalId = setInterval(checkReminders, 60000); // Every 60 seconds
+            checkReminders();
+            const intervalId = setInterval(checkReminders, 60000);
 
             return () => clearInterval(intervalId);
         }
@@ -55,13 +54,12 @@ export default function App() {
         if (!isAuthenticated || !dueReminders || dueReminders.length === 0) return;
         if ('Notification' in window && Notification.permission === 'granted') {
             dueReminders.forEach(reminder => {
-                // Only notify once per reminder
                 if (!notifiedIdsRef.current.has(reminder.id)) {
                     notifiedIdsRef.current.add(reminder.id);
 
                     const notification = new Notification('Follow-up Reminder', {
                         body: `${reminder.lead_name || 'Lead'}: ${reminder.notes || 'Time to follow up!'}`,
-                        icon: '/assets/M.png',
+                        icon: tenant?.logo_url || '/assets/M.png',
                         tag: `reminder-${reminder.id}`,
                         requireInteraction: true
                     });
@@ -110,12 +108,18 @@ export default function App() {
                 return <Team />;
             case 'whatsapp':
                 return <WhatsAppBroadcast />;
+            case 'settings':
+                return <Settings />;
 
             case 'dashboard':
             default:
                 return <Dashboard />;
         }
     };
+
+    // Use tenant branding
+    const logoUrl = tenant?.logo_url || '/assets/M.png';
+    const firmName = tenant?.name || 'ProCRM';
 
     return (
         <div className="app-layout">
@@ -127,7 +131,7 @@ export default function App() {
                     <Icon name="menu" size={22} />
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <img src="/assets/M.png" alt="Logo" style={{ height: '60px', width: 'auto' }} />
+                    <img src={logoUrl} alt={firmName} style={{ height: '60px', width: 'auto' }} />
                 </div>
                 <div style={{ width: '32px' }}></div> {/* Spacer for centering */}
             </header>
@@ -146,4 +150,3 @@ export default function App() {
         </div>
     );
 }
-

@@ -7,7 +7,7 @@ import Icon from './Icons';
  * SECURITY: Role-based menu items
  */
 export default function Sidebar({ isOpen, onClose }) {
-    const { currentView, setCurrentView, user, logout } = useStore();
+    const { currentView, setCurrentView, user, tenant, logout } = useStore();
 
     const isAdmin = user?.role === 'admin';
 
@@ -24,7 +24,7 @@ export default function Sidebar({ isOpen, onClose }) {
             { id: 'all-clients', label: 'All Clients', icon: 'clipboard' },
             { id: 'team', label: 'Team', icon: 'briefcase' },
             { id: 'whatsapp', label: 'WA Broadcast', icon: 'message-circle' },
-
+            { id: 'settings', label: 'Settings', icon: 'settings' },
         ]
         : [
             { id: 'dashboard', label: 'Home', icon: 'home' },
@@ -42,11 +42,15 @@ export default function Sidebar({ isOpen, onClose }) {
         }
     };
 
+    // Use tenant logo if available, fall back to default
+    const logoUrl = tenant?.logo_url || '/assets/M.png';
+    const firmName = tenant?.name || 'ProCRM';
+
     return (
         <aside className={`sidebar ${isOpen ? 'mobile-open' : ''}`}>
             <div className="sidebar-header-mobile">
                 <div className="sidebar-logo p-0">
-                    <img src="/assets/M.png" alt="Logo" style={{ width: '120px', height: 'auto' }} />
+                    <img src={logoUrl} alt={firmName} style={{ width: '120px', height: 'auto' }} />
                 </div>
                 <button className="btn-icon mobile-close-btn" onClick={onClose}><Icon name="x" size={18} /></button>
             </div>
@@ -65,6 +69,30 @@ export default function Sidebar({ isOpen, onClose }) {
             </nav>
 
             <div style={{ marginTop: 'auto', padding: 'var(--space-4)' }}>
+                {/* Subscription badge */}
+                {isAdmin && tenant?.subscription_plan && (
+                    <div style={{
+                        fontSize: 'var(--text-xs)',
+                        color: 'var(--text-muted)',
+                        marginBottom: 'var(--space-2)',
+                        textAlign: 'center',
+                    }}>
+                        <span style={{
+                            background: tenant.subscription_plan === 'trial'
+                                ? 'var(--accent-warning)'
+                                : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                            color: 'white',
+                            padding: '2px 8px',
+                            borderRadius: '10px',
+                            fontSize: '10px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                        }}>
+                            {tenant.subscription_plan === 'trial' ? '⏳ Trial' : `✨ ${tenant.subscription_plan}`}
+                        </span>
+                    </div>
+                )}
+
                 <div style={{
                     fontSize: 'var(--text-sm)',
                     color: 'var(--text-muted)',

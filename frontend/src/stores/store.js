@@ -1,5 +1,5 @@
 /**
- * Zustand Store for CRM State Management
+ * Zustand Store for CRM State Management — Multi-Tenant SaaS
  * RELIABILITY: Persists to localStorage for offline-first capability
  * SPEED: In-memory state with selective persistence
  * SUSTAINABILITY: Minimal boilerplate, ~2KB library
@@ -12,16 +12,35 @@ const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 console.log('API Base URL:', API_BASE_URL);
 
-// API helper with error handling
+/**
+ * Get the tenant slug for API requests.
+ * In production: extracted from subdomain (handled by backend via Host header)
+ * In development: uses x-tenant-slug header with stored slug or 'default'
+ */
+const getTenantSlug = () => {
+    // Check if we have a stored slug (set during login or onboarding)
+    const storedSlug = localStorage.getItem('tenant_slug');
+    if (storedSlug) return storedSlug;
+
+    // Try to extract from hostname (e.g., firm-a.procrm.in -> firm-a)
+    const parts = window.location.hostname.split('.');
+    if (parts.length >= 3) return parts[0];
+
+    return 'default';
+};
+
+// API helper with error handling + tenant header
 const api = async (path, options = {}) => {
     const token = localStorage.getItem('token');
+    const slug = getTenantSlug();
+
     const headers = {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
+        ...(slug && { 'x-tenant-slug': slug }),
     };
 
     const url = `${API_BASE_URL}/api/v1${path}`;
-    console.log('Fetching:', url);
 
     try {
         const res = await fetch(url, { ...options, headers });
@@ -32,9 +51,29 @@ const api = async (path, options = {}) => {
             try {
                 error = JSON.parse(errorText);
             } catch (e) {
-                // If not JSON, use text or status
                 error = { error: errorText || `Request failed (${res.status} ${res.statusText})` };
             }
+
+            // Handle subscription/trial expired - redirect to billing
+            if (error.subscription_expired || error.trial_expired) {
+                const store = useStore.getState();
+                store.setCurrentView('settings');
+                throw new Error(error.error);
+            }
+
+            // Handle WhatsApp not configured
+            if (error.whatsapp_not_configured) {
+                const store = useStore.getState();
+                store.setCurrentView('settings');
+                store.showToast('Configure your WhatsApp credentials in Settings first', 'info');
+                throw new Error(error.error);
+            }
+
+            // Handle user limit reached
+            if (error.upgrade_required) {
+                throw new Error(error.error);
+            }
+
             throw new Error(error.error || `Request failed (${res.status})`);
         }
 
@@ -42,6 +81,35 @@ const api = async (path, options = {}) => {
         return res.json();
     } catch (error) {
         console.error(`API Error [${path}]:`, error);
+        throw error;
+    }
+};
+
+// API helper without tenant header (for public endpoints like onboarding)
+const publicApi = async (path, options = {}) => {
+    const headers = {
+        'Content-Type': 'application/json',
+    };
+
+    const url = `${API_BASE_URL}/api/v1${path}`;
+
+    try {
+        const res = await fetch(url, { ...options, headers });
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            let error;
+            try {
+                error = JSON.parse(errorText);
+            } catch (e) {
+                error = { error: errorText || `Request failed (${res.status})` };
+            }
+            throw new Error(error.error || `Request failed (${res.status})`);
+        }
+
+        return res.json();
+    } catch (error) {
+        console.error(`Public API Error [${path}]:`, error);
         throw error;
     }
 };
@@ -60,6 +128,9 @@ export const useStore = create(
             // Auth state
             user: null,
             isAuthenticated: false,
+
+            // Tenant state (SaaS)
+            tenant: null,
 
             // Data state
             leads: [],
@@ -90,7 +161,129 @@ export const useStore = create(
             openModal: () => set({ isModalOpen: true }),
             closeModal: () => set({ isModalOpen: false }),
 
-            // Cold Reminders Actions
+            // ============================================================
+            // ONBOARDING (Public — no tenant context)
+            // ============================================================
+            checkSlug: async (slug) => {
+                return await publicApi(`/onboarding/check-slug/${encodeURIComponent(slug)}`);
+            },
+
+            signup: async (formData) => {
+                const data = await publicApi('/onboarding/signup', {
+                    method: 'POST',
+                    body: JSON.stringify(formData),
+                });
+
+                // Auto-login after signup
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('user', JSON.stringify(data.user));
+                localStorage.setItem('tenant_slug', data.tenant.slug);
+
+                set({
+                    user: data.user,
+                    tenant: data.tenant,
+                    isAuthenticated: true,
+                    error: null
+                });
+
+                return data;
+            },
+
+            // ============================================================
+            // AUTH
+            // ============================================================
+            login: async (email, password) => {
+                try {
+                    const data = await api('/auth/login', {
+                        method: 'POST',
+                        body: JSON.stringify({ email, password }),
+                    });
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+
+                    // Store tenant info from login response
+                    if (data.tenant) {
+                        localStorage.setItem('tenant_slug', data.tenant.slug);
+                    }
+
+                    set({
+                        user: data.user,
+                        tenant: data.tenant || null,
+                        isAuthenticated: true,
+                        error: null,
+                    });
+                    return true;
+                } catch (error) {
+                    set({ error: error.message });
+                    return false;
+                }
+            },
+
+            logout: () => {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                localStorage.removeItem('tenant_slug');
+                set({
+                    user: null,
+                    tenant: null,
+                    isAuthenticated: false,
+                    dashboardStats: null,
+                    leads: [],
+                    followUps: [],
+                });
+            },
+
+            // ============================================================
+            // TENANT SETTINGS (Admin only)
+            // ============================================================
+            tenantSettings: null,
+            subscriptionInfo: null,
+
+            fetchTenantSettings: async () => {
+                try {
+                    const settings = await api('/tenant-settings');
+                    set({ tenantSettings: settings, tenant: settings });
+                    return settings;
+                } catch (error) {
+                    console.error('Fetch tenant settings error:', error);
+                }
+            },
+
+            updateTenantProfile: async (profileData) => {
+                await api('/tenant-settings/profile', {
+                    method: 'PUT',
+                    body: JSON.stringify(profileData),
+                });
+                // Refresh settings
+                get().fetchTenantSettings();
+            },
+
+            updateWhatsAppConfig: async (configData) => {
+                await api('/tenant-settings/whatsapp', {
+                    method: 'PUT',
+                    body: JSON.stringify(configData),
+                });
+                get().fetchTenantSettings();
+            },
+
+            disconnectWhatsApp: async () => {
+                await api('/tenant-settings/whatsapp', { method: 'DELETE' });
+                get().fetchTenantSettings();
+            },
+
+            fetchSubscriptionInfo: async () => {
+                try {
+                    const info = await api('/tenant-settings/subscription');
+                    set({ subscriptionInfo: info });
+                    return info;
+                } catch (error) {
+                    console.error('Fetch subscription info error:', error);
+                }
+            },
+
+            // ============================================================
+            // COLD REMINDERS
+            // ============================================================
             fetchReminders: async () => {
                 try {
                     const reminders = await api('/reminders');
@@ -102,7 +295,6 @@ export const useStore = create(
 
             fetchDueReminders: async () => {
                 try {
-                    // Send client's current time formatted as YYYY-MM-DD HH:mm:ss for direct DB comparison
                     const now = new Date();
                     const localTime = now.getFullYear() + '-' +
                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
@@ -137,7 +329,9 @@ export const useStore = create(
                 get().fetchReminders();
             },
 
-            // Projects State & Actions
+            // ============================================================
+            // PROJECTS
+            // ============================================================
             projects: [],
 
             fetchProjects: async () => {
@@ -170,38 +364,17 @@ export const useStore = create(
                 get().fetchProjects();
             },
 
-            // Auth
-            login: async (email, password) => {
-                try {
-                    const data = await api('/auth/login', {
-                        method: 'POST',
-                        body: JSON.stringify({ email, password }),
-                    });
-                    localStorage.setItem('token', data.token);
-                    localStorage.setItem('user', JSON.stringify(data.user));
-                    set({ user: data.user, isAuthenticated: true, error: null }); // Re-added isAuthenticated for consistency
-                    return true;
-                } catch (error) {
-                    set({ error: error.message });
-                    return false;
-                }
-            },
-
-            logout: () => {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                set({ user: null, isAuthenticated: false, dashboardStats: null, leads: [], followUps: [] }); // Re-added isAuthenticated for consistency
-            },
-
-            // Leads
+            // ============================================================
+            // LEADS
+            // ============================================================
             fetchLeads: async (filters = {}) => {
-                set({ isLoading: true }); // Keep original isLoading behavior
+                set({ isLoading: true });
                 try {
                     const queryParams = new URLSearchParams(filters).toString();
                     const leads = await api(`/leads?${queryParams}`);
-                    set({ leads, isLoading: false }); // Keep original isLoading behavior
+                    set({ leads, isLoading: false });
                 } catch (error) {
-                    set({ error: error.message, isLoading: false }); // Keep original isLoading behavior
+                    set({ error: error.message, isLoading: false });
                 }
             },
 
@@ -214,7 +387,127 @@ export const useStore = create(
                 }
             },
 
-            // Clients
+            createLead: async (leadData) => {
+                const tempId = Date.now();
+                const optimisticLead = { ...leadData, id: tempId, status: 'new', created_at: new Date().toISOString() };
+
+                set(state => ({ leads: [optimisticLead, ...state.leads], isModalOpen: false }));
+
+                try {
+                    const result = await api('/leads', {
+                        method: 'POST',
+                        body: JSON.stringify(leadData),
+                    });
+                    set(state => ({
+                        leads: state.leads.map(l => l.id === tempId ? { ...l, id: result.id } : l)
+                    }));
+                    return result;
+                } catch (error) {
+                    set(state => ({
+                        leads: state.leads.filter(l => l.id !== tempId),
+                        error: error.message
+                    }));
+                    throw error;
+                }
+            },
+
+            updateLead: async (id, updates) => {
+                const originalLeads = get().leads;
+
+                set(state => ({
+                    leads: state.leads.map(l => l.id === id ? { ...l, ...updates } : l)
+                }));
+
+                try {
+                    await api(`/leads/${id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(updates),
+                    });
+                } catch (error) {
+                    set({ leads: originalLeads, error: error.message });
+                    throw error;
+                }
+            },
+
+            updateLeadStatus: async (id, status, notes = null) => {
+                const originalLeads = get().leads;
+                const userId = get().user?.id || 1;
+
+                set(state => ({
+                    leads: state.leads.map(l => l.id === id ? { ...l, status } : l)
+                }));
+
+                try {
+                    await api(`/leads/${id}/status`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ status, notes, user_id: userId }),
+                    });
+                } catch (error) {
+                    set({ leads: originalLeads, error: error.message });
+                    throw error;
+                }
+            },
+
+            deleteLead: async (id) => {
+                const originalLeads = get().leads;
+
+                set(state => ({
+                    leads: state.leads.filter(l => l.id !== id)
+                }));
+
+                try {
+                    await api(`/leads/${id}`, { method: 'DELETE' });
+                    get().fetchDashboard();
+                    get().fetchWarmLeads();
+                    if (get().user?.role === 'admin') {
+                        const today = new Date().toISOString().split('T')[0];
+                        const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                        get().fetchVisits(today, tomorrow);
+                    }
+                } catch (error) {
+                    set({ leads: originalLeads, error: error.message });
+                    throw error;
+                }
+            },
+
+            // Lead Workflows
+            convertLeadToClient: async (id, dealData = {}) => {
+                try {
+                    await api(`/leads/${id}/convert-client`, {
+                        method: 'PUT',
+                        body: JSON.stringify(dealData)
+                    });
+                    get().fetchLeads();
+                    get().fetchWarmLeads();
+                    get().fetchClients();
+                } catch (error) {
+                    set({ error: error.message });
+                }
+            },
+
+            rejectLead: async (id) => {
+                try {
+                    await api(`/leads/${id}/reject`, { method: 'PATCH' });
+                    get().fetchLeads();
+                    get().fetchWarmLeads();
+                } catch (error) {
+                    set({ error: error.message });
+                }
+            },
+
+            restoreLead: async (id) => {
+                try {
+                    await api(`/leads/${id}/restore`, { method: 'PATCH' });
+                    get().fetchLeads({ archived: '1' });
+                    get().fetchWarmLeads();
+                } catch (error) {
+                    set({ error: error.message });
+                }
+            },
+
+            // ============================================================
+            // CLIENTS
+            // ============================================================
             clients: [],
             fetchClients: async (search = '') => {
                 try {
@@ -261,55 +554,9 @@ export const useStore = create(
                 }
             },
 
-            deleteLead: async (id) => {
-                try {
-                    await api(`/leads/${id}`, { method: 'DELETE' });
-                    get().fetchLeads();
-                    get().fetchWarmLeads();
-                } catch (error) {
-                    set({ error: error.message });
-                }
-            },
-
-            // Lead Workflows
-            convertLeadToClient: async (id, dealData = {}) => {
-                try {
-                    await api(`/leads/${id}/convert-client`, {
-                        method: 'PUT',
-                        body: JSON.stringify(dealData)
-                    });
-                    // Refresh all lists
-                    get().fetchLeads();
-                    get().fetchWarmLeads();
-                    get().fetchClients();
-                } catch (error) {
-                    set({ error: error.message });
-                }
-            },
-
-            rejectLead: async (id) => {
-                try {
-                    await api(`/leads/${id}/reject`, { method: 'PATCH' });
-                    // Refresh lists
-                    get().fetchLeads();
-                    get().fetchWarmLeads();
-                } catch (error) {
-                    set({ error: error.message });
-                }
-            },
-
-            restoreLead: async (id) => {
-                try {
-                    await api(`/leads/${id}/restore`, { method: 'PATCH' });
-                    // Refresh archived leads list and warm leads
-                    get().fetchLeads({ archived: '1' });
-                    get().fetchWarmLeads();
-                } catch (error) {
-                    set({ error: error.message });
-                }
-            },
-
-            // Inventory (Properties)
+            // ============================================================
+            // INVENTORY
+            // ============================================================
             inventory: [],
             fetchInventory: async () => {
                 try {
@@ -359,7 +606,9 @@ export const useStore = create(
                 }
             },
 
-            // Site Visits
+            // ============================================================
+            // SITE VISITS
+            // ============================================================
             visits: [],
             fetchVisits: async (fromDate, toDate) => {
                 try {
@@ -396,7 +645,6 @@ export const useStore = create(
                         method: 'PATCH',
                         body: JSON.stringify({ status: 'completed' }),
                     });
-                    // Optimistically remove from the list
                     set(state => ({
                         visits: state.visits.filter(v => v.id !== id)
                     }));
@@ -406,98 +654,9 @@ export const useStore = create(
                 }
             },
 
-            createLead: async (leadData) => {
-                const tempId = Date.now();
-                const optimisticLead = { ...leadData, id: tempId, status: 'new', created_at: new Date().toISOString() };
-
-                // SPEED: Optimistic update - show immediately
-                set(state => ({ leads: [optimisticLead, ...state.leads], isModalOpen: false }));
-
-                try {
-                    const result = await api('/leads', {
-                        method: 'POST',
-                        body: JSON.stringify(leadData),
-                    });
-                    // Replace temp with real ID
-                    set(state => ({
-                        leads: state.leads.map(l => l.id === tempId ? { ...l, id: result.id } : l)
-                    }));
-                    return result;
-                } catch (error) {
-                    // Rollback on failure
-                    set(state => ({
-                        leads: state.leads.filter(l => l.id !== tempId),
-                        error: error.message
-                    }));
-                    throw error;
-                }
-            },
-
-            updateLead: async (id, updates) => {
-                const originalLeads = get().leads;
-
-                // SPEED: Optimistic update
-                set(state => ({
-                    leads: state.leads.map(l => l.id === id ? { ...l, ...updates } : l)
-                }));
-
-                try {
-                    await api(`/leads/${id}`, {
-                        method: 'PUT',
-                        body: JSON.stringify(updates),
-                    });
-                } catch (error) {
-                    // Rollback on failure
-                    set({ leads: originalLeads, error: error.message });
-                    throw error;
-                }
-            },
-
-            updateLeadStatus: async (id, status, notes = null) => {
-                const originalLeads = get().leads;
-                const userId = get().user?.id || 1;
-
-                // SPEED: Optimistic update
-                set(state => ({
-                    leads: state.leads.map(l => l.id === id ? { ...l, status } : l)
-                }));
-
-                try {
-                    await api(`/leads/${id}/status`, {
-                        method: 'PATCH',
-                        body: JSON.stringify({ status, notes, user_id: userId }),
-                    });
-                } catch (error) {
-                    set({ leads: originalLeads, error: error.message });
-                    throw error;
-                }
-            },
-
-            deleteLead: async (id) => {
-                const originalLeads = get().leads;
-
-                set(state => ({
-                    leads: state.leads.filter(l => l.id !== id)
-                }));
-
-                try {
-                    await api(`/leads/${id}`, { method: 'DELETE' });
-                    // Refresh stats to remove ghost counts
-                    get().fetchDashboard();
-                    get().fetchWarmLeads();
-                    // Also refresh visits if the deleted lead had one
-                    if (get().user?.role === 'admin') {
-                        const today = new Date().toISOString().split('T')[0];
-                        const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-                        get().fetchVisits(today, tomorrow);
-                    }
-                } catch (error) {
-                    set({ leads: originalLeads, error: error.message });
-                    throw error;
-                }
-            },
-
-            // Dashboard
+            // ============================================================
+            // DASHBOARD & SOURCES
+            // ============================================================
             fetchDashboard: async () => {
                 set({ isLoading: true });
                 try {
@@ -508,7 +667,6 @@ export const useStore = create(
                 }
             },
 
-            // Sources
             fetchSources: async () => {
                 try {
                     const sources = await api('/sources');
@@ -518,7 +676,9 @@ export const useStore = create(
                 }
             },
 
-            // Follow-ups
+            // ============================================================
+            // FOLLOW-UPS
+            // ============================================================
             fetchFollowUps: async (pending = true) => {
                 try {
                     const followUps = await api(`/followups?pending=${pending}`);
@@ -552,11 +712,9 @@ export const useStore = create(
                         followUps: state.followUps.filter(f => f.id !== id)
                     }));
 
-                    // If rescheduled, fetch follow-ups again to show the new one
                     if (outcomeData.outcome === 'try_again' || outcomeData.outcome === 'rescheduled') {
                         get().fetchFollowUps();
                     }
-                    // If escalated or rejected, fetch leads to update status if on leads page
                     if (outcomeData.outcome === 'escalated' || outcomeData.outcome === 'rejected') {
                         get().fetchLeads();
                     }
@@ -565,7 +723,9 @@ export const useStore = create(
                 }
             },
 
-            // Users for assignment
+            // ============================================================
+            // USERS / TEAM
+            // ============================================================
             fetchUsers: async () => {
                 try {
                     const users = await api('/users');
@@ -578,7 +738,6 @@ export const useStore = create(
             deleteUser: async (id) => {
                 try {
                     await api(`/users/${id}`, { method: 'DELETE' });
-                    // Optimistic update
                     set(state => ({
                         users: state.users.filter(u => u.id !== id)
                     }));
@@ -594,7 +753,6 @@ export const useStore = create(
                         method: 'POST',
                         body: JSON.stringify(userData)
                     });
-                    // Refresh users list
                     get().fetchUsers();
                 } catch (error) {
                     set({ error: error.message });
@@ -602,7 +760,9 @@ export const useStore = create(
                 }
             },
 
-            // WhatsApp Broadcast State & Actions
+            // ============================================================
+            // WHATSAPP BROADCAST
+            // ============================================================
             whatsappRecipients: null,
             whatsappCampaigns: [],
 
@@ -654,6 +814,7 @@ export const useStore = create(
 
             uploadTemplateImage: async (imageFile) => {
                 const token = localStorage.getItem('token');
+                const slug = getTenantSlug();
                 const formData = new FormData();
                 formData.append('image', imageFile);
 
@@ -662,6 +823,7 @@ export const useStore = create(
                     method: 'POST',
                     headers: {
                         ...(token && { Authorization: `Bearer ${token}` }),
+                        ...(slug && { 'x-tenant-slug': slug }),
                     },
                     body: formData,
                 });
@@ -698,11 +860,12 @@ export const useStore = create(
                 await api(`/whatsapp/templates/${encodeURIComponent(templateName)}`, {
                     method: 'DELETE',
                 });
-                // Refresh templates list
                 get().fetchWhatsAppTemplates();
             },
 
-            // UI actions
+            // ============================================================
+            // UI ACTIONS
+            // ============================================================
             setCurrentView: (view) => set({ currentView: view }),
             setSelectedLead: (lead) => set({ selectedLead: lead }),
             openModal: () => set({ isModalOpen: true }),
@@ -710,10 +873,11 @@ export const useStore = create(
             clearError: () => set({ error: null }),
         }),
         {
-            name: 'crm-mahalaxmi-storage',
+            name: 'crm-saas-storage',
             // RELIABILITY: Only persist essential data
             partialize: (state) => ({
                 user: state.user,
+                tenant: state.tenant,
                 isAuthenticated: state.isAuthenticated,
                 currentView: state.currentView,
             }),

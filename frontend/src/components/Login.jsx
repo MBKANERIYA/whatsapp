@@ -2,8 +2,8 @@ import { useState } from 'preact/hooks';
 import { useStore } from '../stores/store';
 
 /**
- * Login Component
- * RELIABILITY: Form validation and error display
+ * Login Component — Multi-tenant SaaS
+ * Shows tenant branding if available from subdomain
  */
 export default function Login() {
     const { login, isLoading, error } = useStore();
@@ -23,14 +23,27 @@ export default function Login() {
             minHeight: '100vh',
             width: '100vw',
             padding: 'var(--space-4)',
+            background: 'linear-gradient(135deg, rgba(99,102,241,0.05) 0%, rgba(139,92,246,0.08) 100%)',
         }}>
             <div className="card" style={{ width: '100%', maxWidth: '400px' }}>
                 <div style={{ textAlign: 'center', marginBottom: 'var(--space-6)' }}>
                     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-4)' }}>
-                        <img src="/assets/M.png" alt="Mahalaxmi Logo" style={{ width: '160px', height: 'auto' }} />
+                        <div style={{
+                            width: '64px', height: '64px',
+                            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                            borderRadius: '16px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '28px', fontWeight: 800, color: 'white',
+                        }}>
+                            P
+                        </div>
                     </div>
-
-                    <p style={{ color: 'var(--text-muted)' }}>Real Estate Lead Management</p>
+                    <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>
+                        ProCRM
+                    </h1>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                        Real Estate Lead Management
+                    </p>
                 </div>
 
                 {error && (
@@ -55,7 +68,7 @@ export default function Login() {
                             className="form-input"
                             value={email}
                             onInput={(e) => setEmail(e.target.value)}
-                            placeholder="agent@mahalaxmi.com"
+                            placeholder="you@yourfirm.com"
                             required
                         />
                     </div>
@@ -88,7 +101,10 @@ export default function Login() {
                     fontSize: 'var(--text-xs)',
                     color: 'var(--text-muted)'
                 }}>
-                    First time? <a href="#" onClick={(e) => { e.preventDefault(); alert('Contact admin for account creation'); }}>Contact Admin</a>
+                    Don't have an account?{' '}
+                    <a href="https://procrm.in" target="_blank" rel="noopener" style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>
+                        Start Free Trial
+                    </a>
                 </p>
             </div>
         </div>

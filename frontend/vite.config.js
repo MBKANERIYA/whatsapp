@@ -4,6 +4,11 @@ import preact from '@preact/preset-vite';
 // Web version - configured for production deployment
 export default defineConfig({
   plugins: [preact()],
+  css: {
+    // Disable PostCSS — we use vanilla CSS and the workspace path has spaces
+    // which breaks PostCSS config resolution
+    postcss: {},
+  },
   server: {
     port: 5173,
     proxy: {
