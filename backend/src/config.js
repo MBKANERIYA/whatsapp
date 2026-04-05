@@ -1,4 +1,4 @@
-// Config for CRM Mahalaxmi API
+// Config for Real Estate CRM SaaS
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,16 +6,12 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Load environment variables
-// Try .env.production first in production, then .env as fallback
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
 const envPath = path.join(__dirname, '..', envFile);
 
 dotenv.config({ path: envPath });
-
-// Fallback: also try .env (Hostinger stores env vars here)
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
-// Fallback: try current working directory
 if (!process.env.DB_USER) {
     dotenv.config({ path: path.join(process.cwd(), envFile) });
     dotenv.config({ path: path.join(process.cwd(), '.env') });
@@ -31,7 +27,7 @@ export default {
         port: parseInt(process.env.DB_PORT) || 3306,
         user: process.env.DB_USER || 'root',
         password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || 'crm_mahalaxmi',
+        database: process.env.DB_NAME || 'crm_saas',
     },
 
     // JWT
@@ -46,4 +42,17 @@ export default {
 
     // CORS
     corsOrigins: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:5173'],
+
+    // App Domain (for tenant subdomain routing)
+    appDomain: process.env.APP_DOMAIN || 'localhost',
+
+    // Super Admin emails (platform owners)
+    superAdminEmails: process.env.SUPER_ADMIN_EMAILS?.split(',') || [],
+
+    // Razorpay (subscription billing)
+    razorpay: {
+        keyId: process.env.RAZORPAY_KEY_ID || '',
+        keySecret: process.env.RAZORPAY_KEY_SECRET || '',
+        webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
+    },
 };
