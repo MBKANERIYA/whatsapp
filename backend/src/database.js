@@ -517,9 +517,14 @@ const refreshTenantCache = async () => {
 
 /**
  * Invalidate tenant cache (call after tenant updates)
+ * @param {string} [slug] - If provided, only invalidate that slug. Otherwise reset entire cache.
  */
-export const invalidateTenantCache = () => {
-  tenantCacheTime = 0;
+export const invalidateTenantCache = (slug) => {
+  if (slug) {
+    tenantCache.delete(slug);
+  } else {
+    tenantCacheTime = 0;
+  }
 };
 
 // ============================================================

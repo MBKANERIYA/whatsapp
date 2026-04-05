@@ -18,6 +18,10 @@ import inventoryRoutes from './routes/inventory.js';
 import remindersRoutes from './routes/reminders.js';
 import projectsRoutes from './routes/projects.js';
 import whatsappRoutes from './routes/whatsapp.js';
+import onboardingRoutes from './routes/onboarding.js';
+import tenantSettingsRoutes from './routes/tenant-settings.js';
+import tenantsAdminRoutes from './routes/tenants.js';
+import billingRoutes from './routes/billing.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -133,6 +137,17 @@ app.post('/api/v1/whatsapp-webhook', async (req, res) => {
 });
 
 // ============================================================
+// PUBLIC ROUTES (no tenant/auth needed)
+// ============================================================
+app.use('/api/v1/onboarding', onboardingRoutes);
+
+// ============================================================
+// SUPER ADMIN ROUTES (own auth, no tenant context)
+// admin.procrm.in or /api/v1/admin/*
+// ============================================================
+app.use('/api/v1/admin', tenantsAdminRoutes);
+
+// ============================================================
 // TENANT-SCOPED API ROUTES
 // All routes below require tenant resolution
 // ============================================================
@@ -153,6 +168,8 @@ app.use('/api/v1/reminders', auth, remindersRoutes);
 app.use('/api/v1/projects', auth, projectsRoutes);
 app.use('/api/v1/whatsapp', auth, whatsappRoutes);
 app.use('/api/v1/sources', auth, dashboardRoutes);
+app.use('/api/v1/tenant-settings', auth, tenantSettingsRoutes);
+app.use('/api/v1/billing', auth, billingRoutes);
 
 // Serve static frontend files (if built & local)
 const staticDir = join(__dirname, '..', 'public');
