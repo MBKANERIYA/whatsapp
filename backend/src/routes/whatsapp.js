@@ -7,9 +7,7 @@ import { checkWhatsAppEnabled } from '../middleware/limits.js';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
-/**
- * Admin-only + WhatsApp plan check for all WhatsApp routes
- */
+// Admin-only + WhatsApp plan check
 router.use((req, res, next) => {
     if (!req.user || req.user.role !== 'admin') {
         return res.status(403).json({ error: 'Admin access required for WhatsApp features' });
@@ -20,80 +18,62 @@ router.use(checkWhatsAppEnabled);
 
 /**
  * GET /api/v1/whatsapp/recipients
+ * Fetch contacts as broadcast recipients with filtering
  */
 router.get('/recipients', async (req, res) => {
     try {
-        const { type = 'all', status, search } = req.query;
-        const result = { clients: [], leads: [], counts: {} };
+        const { tag, search, location, min_ticket, max_ticket } = req.query;
 
-        const applySearch = (sql, params, forLeads = false) => {
-            let filteredSql = sql;
-            if (search) {
-                const keywords = search.split(',').map(k => k.trim()).filter(k => k.length > 0);
-                for (const keyword of keywords) {
-                    const isNumeric = /^\d+(\.\d+)?$/.test(keyword);
-                    if (isNumeric) {
-                        const numValue = parseFloat(keyword);
-                        if (forLeads) {
-                            filteredSql += ` AND (budget_max >= ? OR budget_min >= ?)`;
-                            params.push(numValue, numValue);
-                        } else {
-                            filteredSql += ` AND (price >= ?)`;
-                            params.push(numValue);
-                        }
-                    } else {
-                        const searchTerm = `%${keyword}%`;
-                        if (forLeads) {
-                            filteredSql += ` AND (name LIKE ? OR email LIKE ? OR location LIKE ? OR budget_max LIKE ? OR budget_min LIKE ?)`;
-                            params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
-                        } else {
-                            filteredSql += ` AND (name LIKE ? OR email LIKE ? OR location LIKE ? OR price LIKE ?)`;
-                            params.push(searchTerm, searchTerm, searchTerm, searchTerm);
-                        }
-                    }
-                }
-            }
-            return { sql: filteredSql, params };
-        };
+        let sql = `SELECT id, name, phone, email, location, ticket_size, tags, whatsapp_consent 
+                    FROM contacts WHERE tenant_id = ? AND phone IS NOT NULL AND phone != '' AND whatsapp_consent = TRUE`;
+        const params = [req.tenantId];
 
-        if (type === 'clients' || type === 'all') {
-            const baseSql = `SELECT id, name, phone, alternate_phone, email, whatsapp_consent 
-                 FROM clients WHERE tenant_id = ? AND phone IS NOT NULL AND phone != ''`;
-            const { sql: clientSql, params: clientParams } = applySearch(baseSql, [req.tenantId], false);
-            
-            const clients = await query(clientSql, clientParams);
-            result.clients = clients.map(c => ({
-                ...c,
-                validPhone: !!normalizePhone(c.phone),
-                type: 'client',
-            }));
-            result.counts.clients = clients.length;
-            result.counts.clientsWithValidPhone = clients.filter(c => normalizePhone(c.phone)).length;
+        if (tag) {
+            sql += ' AND JSON_CONTAINS(tags, ?)';
+            params.push(JSON.stringify(tag));
         }
 
-        if (type === 'leads' || type === 'all') {
-            let baseSql = `SELECT id, name, phone, email, status, whatsapp_consent 
-                           FROM leads WHERE tenant_id = ? AND phone IS NOT NULL AND phone != '' AND status NOT IN ('rejected', 'client')`;
-            const initParams = [req.tenantId];
-            if (status) {
-                baseSql += ' AND status = ?';
-                initParams.push(status);
-            }
-            const { sql: leadSql, params: leadParams } = applySearch(baseSql, initParams, true);
-            
-            const leads = await query(leadSql, leadParams);
-            result.leads = leads.map(l => ({
-                ...l,
-                validPhone: !!normalizePhone(l.phone),
-                type: 'lead',
-            }));
-            result.counts.leads = leads.length;
-            result.counts.leadsWithValidPhone = leads.filter(l => normalizePhone(l.phone)).length;
+        if (location) {
+            sql += ' AND location LIKE ?';
+            params.push(`%${location}%`);
         }
 
-        result.counts.total = (result.counts.clientsWithValidPhone || 0) + (result.counts.leadsWithValidPhone || 0);
+        if (min_ticket) {
+            sql += ' AND ticket_size >= ?';
+            params.push(parseFloat(min_ticket));
+        }
 
-        res.json(result);
+        if (max_ticket) {
+            sql += ' AND ticket_size <= ?';
+            params.push(parseFloat(max_ticket));
+        }
+
+        if (search) {
+            const keywords = search.split(',').map(k => k.trim()).filter(k => k.length > 0);
+            for (const keyword of keywords) {
+                sql += ' AND (name LIKE ? OR email LIKE ? OR phone LIKE ? OR location LIKE ?)';
+                const s = `%${keyword}%`;
+                params.push(s, s, s, s);
+            }
+        }
+
+        sql += ' ORDER BY name ASC';
+
+        const contacts = await query(sql, params);
+
+        const withValid = contacts.map(c => ({
+            ...c,
+            tags: c.tags ? (typeof c.tags === 'string' ? JSON.parse(c.tags) : c.tags) : [],
+            validPhone: !!normalizePhone(c.phone),
+        }));
+
+        res.json({
+            contacts: withValid,
+            counts: {
+                total: contacts.length,
+                withValidPhone: withValid.filter(c => c.validPhone).length,
+            }
+        });
     } catch (error) {
         console.error('WhatsApp recipients error:', error);
         res.status(500).json({ error: 'Failed to fetch recipients' });
@@ -102,16 +82,15 @@ router.get('/recipients', async (req, res) => {
 
 /**
  * POST /api/v1/whatsapp/send
+ * Send a single template message
  */
 router.post('/send', async (req, res) => {
     try {
         const { phone, campaignName, templateParams = [], userName = '', languageCode } = req.body;
-
         if (!phone) return res.status(400).json({ error: 'Phone number is required' });
         if (!campaignName) return res.status(400).json({ error: 'Campaign name is required' });
 
         const data = await sendTemplateMessage(phone, campaignName, templateParams, userName, languageCode, req.tenant);
-
         res.json({ success: true, message: 'Message sent', data });
     } catch (error) {
         console.error('WhatsApp send error:', error);
@@ -121,59 +100,39 @@ router.post('/send', async (req, res) => {
 
 /**
  * POST /api/v1/whatsapp/broadcast
+ * Broadcast template to filtered contacts
  */
 router.post('/broadcast', async (req, res) => {
     try {
         const { campaignName, templateParams = [], recipientType, recipientFilter, recipientIds, languageCode } = req.body;
-
         if (!campaignName) return res.status(400).json({ error: 'Campaign name is required' });
-        if (!recipientType) return res.status(400).json({ error: 'Recipient type is required' });
 
         let recipients = [];
 
-        if (recipientType === 'custom' && recipientIds) {
-            const { clientIds = [], leadIds = [] } = recipientIds;
+        if (recipientType === 'custom' && recipientIds && recipientIds.length > 0) {
+            // Custom selection by IDs
+            const placeholders = recipientIds.map(() => '?').join(',');
+            const contacts = await query(
+                `SELECT id, name, phone FROM contacts WHERE tenant_id = ? AND id IN (${placeholders}) AND phone IS NOT NULL AND phone != ''`,
+                [req.tenantId, ...recipientIds]
+            );
+            recipients = contacts;
 
-            if (clientIds.length > 0) {
-                const placeholders = clientIds.map(() => '?').join(',');
-                const clients = await query(
-                    `SELECT id, name, phone FROM clients WHERE tenant_id = ? AND id IN (${placeholders}) AND phone IS NOT NULL AND phone != ''`,
-                    [req.tenantId, ...clientIds]
-                );
-                recipients.push(...clients.map(c => ({ ...c, type: 'client' })));
-            }
+        } else if (recipientType === 'tagged' && recipientFilter?.tag) {
+            // Filter by tag
+            const contacts = await query(
+                `SELECT id, name, phone FROM contacts WHERE tenant_id = ? AND phone IS NOT NULL AND phone != '' AND whatsapp_consent = TRUE AND JSON_CONTAINS(tags, ?)`,
+                [req.tenantId, JSON.stringify(recipientFilter.tag)]
+            );
+            recipients = contacts;
 
-            if (leadIds.length > 0) {
-                const placeholders = leadIds.map(() => '?').join(',');
-                const leads = await query(
-                    `SELECT id, name, phone FROM leads WHERE tenant_id = ? AND id IN (${placeholders}) AND phone IS NOT NULL AND phone != ''`,
-                    [req.tenantId, ...leadIds]
-                );
-                recipients.push(...leads.map(l => ({ ...l, type: 'lead' })));
-            }
-        } else if (recipientType === 'all_clients') {
-            const clients = await query(
-                `SELECT id, name, phone FROM clients WHERE tenant_id = ? AND phone IS NOT NULL AND phone != ''`,
+        } else {
+            // All contacts
+            const contacts = await query(
+                `SELECT id, name, phone FROM contacts WHERE tenant_id = ? AND phone IS NOT NULL AND phone != '' AND whatsapp_consent = TRUE`,
                 [req.tenantId]
             );
-            recipients = clients.map(c => ({ ...c, type: 'client' }));
-
-        } else if (recipientType === 'all_leads') {
-            const leads = await query(
-                `SELECT id, name, phone FROM leads WHERE tenant_id = ? AND phone IS NOT NULL AND phone != '' AND status NOT IN ('rejected', 'client')`,
-                [req.tenantId]
-            );
-            recipients = leads.map(l => ({ ...l, type: 'lead' }));
-
-        } else if (recipientType === 'leads_by_status') {
-            const status = recipientFilter?.status;
-            if (!status) return res.status(400).json({ error: 'Status filter is required for leads_by_status' });
-
-            const leads = await query(
-                `SELECT id, name, phone FROM leads WHERE tenant_id = ? AND phone IS NOT NULL AND phone != '' AND status = ?`,
-                [req.tenantId, status]
-            );
-            recipients = leads.map(l => ({ ...l, type: 'lead' }));
+            recipients = contacts;
         }
 
         if (recipients.length === 0) {
@@ -187,7 +146,7 @@ router.post('/broadcast', async (req, res) => {
             req.tenantId,
             `Broadcast ${new Date().toLocaleDateString('en-IN')}`,
             campaignName,
-            recipientType,
+            recipientType || 'all',
             JSON.stringify(recipientFilter || {}),
             recipients.length,
             req.user.userId,
@@ -195,7 +154,7 @@ router.post('/broadcast', async (req, res) => {
 
         const campaignId = campaign.lastInsertRowid;
 
-        // Process broadcast in background with tenant context
+        // Process in background
         processBroadcast(campaignId, recipients, campaignName, templateParams, languageCode, req.tenant, req.tenantId).catch(err => {
             console.error('Broadcast processing error:', err);
         });
@@ -204,7 +163,7 @@ router.post('/broadcast', async (req, res) => {
             success: true,
             campaignId,
             totalRecipients: recipients.length,
-            message: `Broadcasting to ${recipients.length} recipients. Check campaign status for progress.`,
+            message: `Broadcasting to ${recipients.length} recipients.`,
         });
     } catch (error) {
         console.error('WhatsApp broadcast error:', error);
@@ -212,16 +171,14 @@ router.post('/broadcast', async (req, res) => {
     }
 });
 
-/**
- * Process broadcast in background
- */
 async function processBroadcast(campaignId, recipients, campaignName, templateParams, languageCode, tenant, tenantId) {
     try {
         for (const r of recipients) {
-            await run(`
-                INSERT INTO whatsapp_messages (tenant_id, campaign_id, phone, recipient_name, recipient_type, recipient_id, status)
-                VALUES (?, ?, ?, ?, ?, ?, 'pending')
-            `, [tenantId, campaignId, normalizePhone(r.phone) || r.phone, r.name, r.type, r.id]);
+            await run(
+                `INSERT INTO whatsapp_messages (tenant_id, campaign_id, phone, recipient_name, recipient_id, status)
+                 VALUES (?, ?, ?, ?, ?, 'pending')`,
+                [tenantId, campaignId, normalizePhone(r.phone) || r.phone, r.name, r.id]
+            );
         }
 
         const results = await sendBulkMessages(recipients, campaignName, templateParams, 50, 1000, languageCode, tenant);
@@ -275,7 +232,6 @@ router.get('/campaigns', async (req, res) => {
         `, [req.tenantId]);
         res.json(campaigns);
     } catch (error) {
-        console.error('WhatsApp campaigns list error:', error);
         res.status(500).json({ error: 'Failed to fetch campaigns' });
     }
 });
@@ -298,7 +254,6 @@ router.get('/campaigns/:id', async (req, res) => {
 
         res.json({ ...campaign, messages });
     } catch (error) {
-        console.error('WhatsApp campaign detail error:', error);
         res.status(500).json({ error: 'Failed to fetch campaign details' });
     }
 });
@@ -308,20 +263,11 @@ router.get('/campaigns/:id', async (req, res) => {
  */
 router.post('/templates/upload-image', upload.single('image'), async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No image file provided' });
-        }
+        if (!req.file) return res.status(400).json({ error: 'No image file provided' });
 
-        const headerHandle = await uploadMediaForTemplate(
-            req.file.buffer,
-            req.file.mimetype,
-            req.file.originalname,
-            req.tenant
-        );
-
+        const headerHandle = await uploadMediaForTemplate(req.file.buffer, req.file.mimetype, req.file.originalname, req.tenant);
         res.json({ success: true, headerHandle });
     } catch (error) {
-        console.error('Template image upload error:', error);
         res.status(500).json({ error: error.message || 'Failed to upload image' });
     }
 });
@@ -332,39 +278,26 @@ router.post('/templates/upload-image', upload.single('image'), async (req, res) 
 router.post('/templates', async (req, res) => {
     try {
         const { name, category, language, bodyText, headerImageHandle, footerText, callButtonText, callButtonPhone } = req.body;
-
         if (!name) return res.status(400).json({ error: 'Template name is required' });
         if (!bodyText) return res.status(400).json({ error: 'Body text is required' });
 
         const result = await createTemplate({
-            name,
-            category: category || 'MARKETING',
-            language: language || 'en',
-            bodyText,
-            headerImageHandle: headerImageHandle || null,
-            footerText: footerText || null,
-            callButtonText: callButtonText || null,
+            name, category: category || 'MARKETING', language: language || 'en',
+            bodyText, headerImageHandle: headerImageHandle || null,
+            footerText: footerText || null, callButtonText: callButtonText || null,
             callButtonPhone: callButtonPhone || null,
         }, req.tenant);
 
-        // Save to local DB
         try {
             await run(`
                 INSERT INTO whatsapp_templates (tenant_id, meta_template_id, name, category, language, body_text, has_header_image, footer_text, call_button_text, call_button_phone, status, created_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [
-                req.tenantId,
-                result.id,
-                name.toLowerCase().replace(/[^a-z0-9_]/g, '_'),
-                category || 'MARKETING',
-                language || 'en',
-                bodyText,
-                headerImageHandle ? 1 : 0,
-                footerText || null,
-                callButtonText || null,
-                callButtonPhone || null,
-                result.status || 'PENDING',
-                req.user.userId,
+                req.tenantId, result.id, name.toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+                category || 'MARKETING', language || 'en', bodyText,
+                headerImageHandle ? 1 : 0, footerText || null,
+                callButtonText || null, callButtonPhone || null,
+                result.status || 'PENDING', req.user.userId,
             ]);
         } catch (dbErr) {
             console.error('Failed to save template to local DB:', dbErr.message);
@@ -372,7 +305,6 @@ router.post('/templates', async (req, res) => {
 
         res.json({ success: true, template: result });
     } catch (error) {
-        console.error('Template creation error:', error);
         res.status(500).json({ error: error.message || 'Failed to create template' });
     }
 });
@@ -385,7 +317,6 @@ router.get('/templates', async (req, res) => {
         const templates = await fetchTemplates(req.tenant);
         res.json(templates);
     } catch (error) {
-        console.error('Fetch templates error:', error);
         res.status(500).json({ error: error.message || 'Failed to fetch templates' });
     }
 });
@@ -396,16 +327,9 @@ router.get('/templates', async (req, res) => {
 router.delete('/templates/:name', async (req, res) => {
     try {
         await deleteTemplate(req.params.name, req.tenant);
-
-        try {
-            await run('DELETE FROM whatsapp_templates WHERE name = ? AND tenant_id = ?', [req.params.name, req.tenantId]);
-        } catch (dbErr) {
-            // Non-fatal
-        }
-
+        try { await run('DELETE FROM whatsapp_templates WHERE name = ? AND tenant_id = ?', [req.params.name, req.tenantId]); } catch (e) {}
         res.json({ success: true, message: `Template "${req.params.name}" deleted` });
     } catch (error) {
-        console.error('Delete template error:', error);
         res.status(500).json({ error: error.message || 'Failed to delete template' });
     }
 });

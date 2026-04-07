@@ -1,4 +1,4 @@
-// Config for Real Estate CRM SaaS
+// Config for WhatsApp Broadcast SaaS Platform
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -27,7 +27,7 @@ export default {
         port: parseInt(process.env.DB_PORT) || 3306,
         user: process.env.DB_USER || 'root',
         password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || 'crm_saas',
+        database: process.env.DB_NAME || 'whatsapp_saas',
     },
 
     // JWT
@@ -48,11 +48,4 @@ export default {
 
     // Super Admin emails (platform owners)
     superAdminEmails: process.env.SUPER_ADMIN_EMAILS?.split(',') || [],
-
-    // Razorpay (subscription billing)
-    razorpay: {
-        keyId: process.env.RAZORPAY_KEY_ID || '',
-        keySecret: process.env.RAZORPAY_KEY_SECRET || '',
-        webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
-    },
 };

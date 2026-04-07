@@ -1,122 +1,87 @@
 import { useStore } from '../stores/store';
 import Icon from './Icons';
 
-/**
- * Sidebar Navigation
- * SPEED: Pure component with minimal re-renders
- * SECURITY: Role-based menu items
- */
+const NAV_ITEMS = [
+    { id: 'contacts', label: 'Contacts', icon: 'contacts' },
+    { id: 'broadcast', label: 'Broadcast', icon: 'whatsapp' },
+    { id: 'chat', label: 'Chat Inbox', icon: 'chat' },
+    { id: 'settings', label: 'Settings', icon: 'settings' },
+];
+
 export default function Sidebar({ isOpen, onClose }) {
-    const { currentView, setCurrentView, user, tenant, logout } = useStore();
+    const { currentView, setCurrentView, user, tenant, logout, totalUnread } = useStore();
 
-    const isAdmin = user?.role === 'admin';
-
-    // Admin sees all menu items, Employee sees limited options
-    const navItems = isAdmin
-        ? [
-            { id: 'dashboard', label: 'Dashboard', icon: 'bar-chart' },
-            { id: 'leads', label: 'New Leads', icon: 'users' },
-            { id: 'warm-leads', label: 'Warm Leads', icon: 'flame' },
-            { id: 'clients', label: 'Clients', icon: 'trophy' },
-            { id: 'inventory', label: 'Inventory', icon: 'home' },
-            { id: 'followups', label: 'Follow-ups', icon: 'phone' },
-            { id: 'archived-leads', label: 'Archives', icon: 'trash' },
-            { id: 'all-clients', label: 'All Clients', icon: 'clipboard' },
-            { id: 'team', label: 'Team', icon: 'briefcase' },
-            { id: 'whatsapp', label: 'WA Broadcast', icon: 'message-circle' },
-            { id: 'settings', label: 'Settings', icon: 'settings' },
-        ]
-        : [
-            { id: 'dashboard', label: 'Home', icon: 'home' },
-            { id: 'my-leads', label: 'My Leads', icon: 'clipboard' },
-            { id: 'leads', label: 'Add Lead', icon: 'plus' },
-            { id: 'clients', label: 'Add Client', icon: 'trophy' },
-            { id: 'inventory', label: 'Inventory', icon: 'building' },
-            { id: 'followups', label: 'My Follow-ups', icon: 'phone' },
-        ];
-
-    const handleNavClick = (view) => {
-        setCurrentView(view);
-        if (window.innerWidth <= 768 && onClose) {
-            onClose();
-        }
+    const handleNav = (viewId) => {
+        setCurrentView(viewId);
+        onClose?.();
     };
 
-    // Use tenant logo if available, fall back to default
     const logoUrl = tenant?.logo_url || '/assets/M.png';
-    const firmName = tenant?.name || 'ProCRM';
+    const firmName = tenant?.name || 'WhatsApp Platform';
 
     return (
-        <aside className={`sidebar ${isOpen ? 'mobile-open' : ''}`}>
-            <div className="sidebar-header-mobile">
-                <div className="sidebar-logo p-0">
-                    <img src={logoUrl} alt={firmName} style={{ width: '120px', height: 'auto' }} />
-                </div>
-                <button className="btn-icon mobile-close-btn" onClick={onClose}><Icon name="x" size={18} /></button>
+        <aside className={`sidebar ${isOpen ? 'sidebar--open' : ''}`}>
+            {/* Logo */}
+            <div className="sidebar-logo">
+                <img src={logoUrl} alt={firmName} style={{ height: '36px', width: 'auto', borderRadius: '8px' }} />
+                <span className="sidebar-logo-text">{firmName}</span>
             </div>
 
+            {/* Navigation */}
             <nav className="sidebar-nav">
-                {navItems.map(item => (
+                {NAV_ITEMS.map(item => (
                     <button
                         key={item.id}
-                        className={`nav-item ${currentView === item.id ? 'active' : ''}`}
-                        onClick={() => handleNavClick(item.id)}
+                        className={`sidebar-nav-item ${currentView === item.id ? 'active' : ''}`}
+                        onClick={() => handleNav(item.id)}
                     >
-                        <Icon name={item.icon} size={18} />
-                        {item.label}
+                        <Icon name={item.icon} size={20} />
+                        <span>{item.label}</span>
+                        {item.id === 'chat' && totalUnread > 0 && (
+                            <span className="badge badge--danger" style={{
+                                marginLeft: 'auto',
+                                minWidth: '20px',
+                                height: '20px',
+                                borderRadius: '10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                background: '#ef4444',
+                                color: '#fff',
+                                padding: '0 6px',
+                            }}>
+                                {totalUnread > 99 ? '99+' : totalUnread}
+                            </span>
+                        )}
                     </button>
                 ))}
             </nav>
 
-            <div style={{ marginTop: 'auto', padding: 'var(--space-4)' }}>
-                {/* Subscription badge */}
-                {isAdmin && tenant?.subscription_plan && (
-                    <div style={{
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--text-muted)',
-                        marginBottom: 'var(--space-2)',
-                        textAlign: 'center',
+            {/* User */}
+            <div className="sidebar-footer">
+                <div className="sidebar-user">
+                    <div className="avatar" style={{
+                        width: '36px', height: '36px', borderRadius: '50%',
+                        background: 'var(--primary)', color: '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, fontSize: '14px',
                     }}>
-                        <span style={{
-                            background: tenant.subscription_plan === 'trial'
-                                ? 'var(--accent-warning)'
-                                : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                            color: 'white',
-                            padding: '2px 8px',
-                            borderRadius: '10px',
-                            fontSize: '10px',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                        }}>
-                            {tenant.subscription_plan === 'trial' ? '⏳ Trial' : `✨ ${tenant.subscription_plan}`}
-                        </span>
+                        {(user?.name || 'U').charAt(0).toUpperCase()}
                     </div>
-                )}
-
-                <div style={{
-                    fontSize: 'var(--text-sm)',
-                    color: 'var(--text-muted)',
-                    marginBottom: 'var(--space-2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-2)'
-                }}>
-                    <span style={{
-                        background: isAdmin ? 'var(--accent-primary)' : 'var(--accent-success)',
-                        color: 'white',
-                        padding: '2px 6px',
-                        borderRadius: 'var(--radius-sm)',
-                        fontSize: 'var(--text-xs)',
-                        textTransform: 'uppercase',
-                    }}>
-                        {isAdmin ? 'Admin' : 'Agent'}
-                    </span>
-                    {user?.name || 'User'}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {user?.name || 'User'}
+                        </div>
+                        <div style={{ fontSize: '11px', opacity: 0.6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {user?.email || ''}
+                        </div>
+                    </div>
+                    <button className="btn-icon" onClick={logout} title="Logout">
+                        <Icon name="logout" size={18} />
+                    </button>
                 </div>
-                <button className="btn btn-secondary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }} onClick={logout}>
-                    <Icon name="log-out" size={15} />
-                    Logout
-                </button>
             </div>
         </aside>
     );

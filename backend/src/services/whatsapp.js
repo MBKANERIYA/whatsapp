@@ -1,27 +1,16 @@
 /**
  * Meta WhatsApp Cloud API Service
- * Multi-tenant: reads credentials from tenant object instead of process.env
+ * Multi-tenant: reads credentials from tenant object
  */
 
 const WHATSAPP_API_VERSION = 'v22.0';
 const WHATSAPP_API_URL = `https://graph.facebook.com/${WHATSAPP_API_VERSION}`;
 
-/**
- * Get WhatsApp credentials for a tenant
- * @param {object} tenant - Tenant object from database (req.tenant)
- */
 function getCredentials(tenant) {
-    if (!tenant) {
-        throw new Error('Tenant context required for WhatsApp operations');
-    }
-
+    if (!tenant) throw new Error('Tenant context required for WhatsApp operations');
     const token = tenant.whatsapp_access_token;
     const phoneId = tenant.whatsapp_phone_number_id;
-
-    if (!token || !phoneId) {
-        throw new Error('WhatsApp not configured. Add your Meta API credentials in Settings.');
-    }
-
+    if (!token || !phoneId) throw new Error('WhatsApp not configured. Add your Meta API credentials in Settings.');
     return { token, phoneId, wabaId: tenant.whatsapp_business_account_id };
 }
 
@@ -30,63 +19,42 @@ function getCredentials(tenant) {
  */
 export function normalizePhone(phone) {
     if (!phone) return null;
-
     let cleaned = phone.replace(/\D/g, '');
-
-    if (cleaned.length === 10) {
-        return '91' + cleaned;
-    }
-    if (cleaned.startsWith('91') && cleaned.length === 12) {
-        return cleaned;
-    }
-    if (cleaned.startsWith('0') && cleaned.length === 11) {
-        return '91' + cleaned.slice(1);
-    }
-    if (cleaned.startsWith('091') && cleaned.length === 13) {
-        return cleaned.slice(1);
-    }
-
+    if (cleaned.length === 10) return '91' + cleaned;
+    if (cleaned.startsWith('91') && cleaned.length === 12) return cleaned;
+    if (cleaned.startsWith('0') && cleaned.length === 11) return '91' + cleaned.slice(1);
+    if (cleaned.startsWith('091') && cleaned.length === 13) return cleaned.slice(1);
     return cleaned.length >= 10 ? cleaned : null;
 }
 
-/**
- * Cache for template definitions and media IDs (per-tenant)
- */
+// Caches
 const templateDefCache = new Map();
 const mediaIdCache = new Map();
 
-/**
- * Get tenant-specific cache key
- */
 function tenantCacheKey(tenant, key) {
     return `${tenant.id}:${key}`;
 }
 
-/**
- * Downloads image from Meta CDN and re-uploads via WhatsApp Media API
- */
 async function processAndCacheMediaId(imageUrl, tenant) {
     const cacheKey = tenantCacheKey(tenant, imageUrl);
-    if (mediaIdCache.has(cacheKey)) {
-        return mediaIdCache.get(cacheKey);
-    }
-    
+    if (mediaIdCache.has(cacheKey)) return mediaIdCache.get(cacheKey);
+
     try {
         const { token, phoneId } = getCredentials(tenant);
         const imgRes = await fetch(imageUrl);
         if (!imgRes.ok) throw new Error(`Failed to download image: ${imgRes.statusText}`);
-        
+
         const arrayBuffer = await imgRes.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
-        
+
         const blob = new Blob([buffer], { type: contentType });
         const formData = new FormData();
         formData.append('file', blob, 'header_image.jpg');
         formData.append('type', contentType);
         formData.append('messaging_product', 'whatsapp');
 
-        const uploadRes = await fetch(`https://graph.facebook.com/v22.0/${phoneId}/media`, {
+        const uploadRes = await fetch(`${WHATSAPP_API_URL}/${phoneId}/media`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData
@@ -96,32 +64,23 @@ async function processAndCacheMediaId(imageUrl, tenant) {
         if (uploadData.id) {
             mediaIdCache.set(cacheKey, uploadData.id);
             return uploadData.id;
-        } else {
-            console.warn('[WhatsApp] Media upload failed:', uploadData);
-            return null;
         }
+        return null;
     } catch (err) {
         console.error('[WhatsApp] Error processing media URL:', err.message);
         return null;
     }
 }
 
-/**
- * Fetch a single template's definition from Meta
- */
 async function getTemplateDefinition(templateName, tenant) {
     const cacheKey = tenantCacheKey(tenant, templateName);
     const cached = templateDefCache.get(cacheKey);
-    if (cached && Date.now() - cached.fetchedAt < 5 * 60 * 1000) {
-        return cached.data;
-    }
+    if (cached && Date.now() - cached.fetchedAt < 5 * 60 * 1000) return cached.data;
 
     try {
         const templates = await fetchTemplates(tenant);
         const tpl = templates.find(t => t.name === templateName);
-        if (tpl) {
-            templateDefCache.set(cacheKey, { data: tpl, fetchedAt: Date.now() });
-        }
+        if (tpl) templateDefCache.set(cacheKey, { data: tpl, fetchedAt: Date.now() });
         return tpl || null;
     } catch (err) {
         console.error(`[WhatsApp] Failed to fetch template definition for "${templateName}":`, err.message);
@@ -130,60 +89,40 @@ async function getTemplateDefinition(templateName, tenant) {
 }
 
 /**
- * Send a single template message via Meta Cloud API
- * @param {object} tenant - Tenant object with WhatsApp credentials
+ * Send a template message
  */
 export async function sendTemplateMessage(phone, campaignName, templateParams = [], userName = '', languageCode = null, tenant) {
     const normalizedPhone = normalizePhone(phone);
-    if (!normalizedPhone) {
-        throw new Error(`Invalid phone number: ${phone}`);
-    }
+    if (!normalizedPhone) throw new Error(`Invalid phone number: ${phone}`);
 
     const { token, phoneId } = getCredentials(tenant);
-
     const tplDef = await getTemplateDefinition(campaignName, tenant);
     const tplComponents = tplDef?.components || [];
-
     const components = [];
 
-    // HEADER component
+    // HEADER
     const headerComp = tplComponents.find(c => c.type === 'HEADER');
     if (headerComp) {
         if (headerComp.format === 'IMAGE') {
-            const imageUrl = headerComp.example?.header_handle?.[0] || headerComp.example?.header_url?.[0] || null;
+            const imageUrl = headerComp.example?.header_handle?.[0] || headerComp.example?.header_url?.[0];
             if (imageUrl) {
                 let imageSpec = { link: imageUrl };
                 if (imageUrl.includes('scontent.whatsapp.net')) {
                     const mediaId = await processAndCacheMediaId(imageUrl, tenant);
-                    if (mediaId) {
-                        imageSpec = { id: mediaId };
-                    }
+                    if (mediaId) imageSpec = { id: mediaId };
                 }
-                components.push({
-                    type: "header",
-                    parameters: [{ type: "image", image: imageSpec }]
-                });
+                components.push({ type: "header", parameters: [{ type: "image", image: imageSpec }] });
             }
         } else if (headerComp.format === 'VIDEO') {
-            const videoUrl = headerComp.example?.header_handle?.[0] || headerComp.example?.header_url?.[0] || null;
-            if (videoUrl) {
-                components.push({
-                    type: "header",
-                    parameters: [{ type: "video", video: { link: videoUrl } }]
-                });
-            }
+            const videoUrl = headerComp.example?.header_handle?.[0] || headerComp.example?.header_url?.[0];
+            if (videoUrl) components.push({ type: "header", parameters: [{ type: "video", video: { link: videoUrl } }] });
         } else if (headerComp.format === 'DOCUMENT') {
-            const docUrl = headerComp.example?.header_handle?.[0] || headerComp.example?.header_url?.[0] || null;
-            if (docUrl) {
-                components.push({
-                    type: "header",
-                    parameters: [{ type: "document", document: { link: docUrl } }]
-                });
-            }
+            const docUrl = headerComp.example?.header_handle?.[0] || headerComp.example?.header_url?.[0];
+            if (docUrl) components.push({ type: "header", parameters: [{ type: "document", document: { link: docUrl } }] });
         }
     }
 
-    // BODY component
+    // BODY
     const filledParams = templateParams.filter(p => p && String(p).trim() !== '');
     if (filledParams.length > 0) {
         components.push({
@@ -197,17 +136,12 @@ export async function sendTemplateMessage(phone, campaignName, templateParams = 
         });
     }
 
-    // BUTTON components
+    // BUTTONS
     const buttonsComp = tplComponents.find(c => c.type === 'BUTTONS');
     if (buttonsComp?.buttons) {
         buttonsComp.buttons.forEach((btn, idx) => {
             if (btn.type === 'URL' && btn.url?.includes('{{')) {
-                components.push({
-                    type: "button",
-                    sub_type: "url",
-                    index: String(idx),
-                    parameters: [{ type: "text", text: "details" }]
-                });
+                components.push({ type: "button", sub_type: "url", index: String(idx), parameters: [{ type: "text", text: "details" }] });
             }
         });
     }
@@ -227,164 +161,172 @@ export async function sendTemplateMessage(phone, campaignName, templateParams = 
 
     const response = await fetch(`${WHATSAPP_API_URL}/${phoneId}/messages`, {
         method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
     });
 
     const data = await response.json();
-
-    if (!response.ok) {
-        const errMsg = data.error?.message || `WhatsApp Cloud API error (${response.status})`;
-        throw new Error(errMsg);
-    }
+    if (!response.ok) throw new Error(data.error?.message || `WhatsApp Cloud API error (${response.status})`);
 
     return {
-        messageId: data.messages && data.messages.length > 0 ? data.messages[0].id : null,
-        data: data
+        messageId: data.messages?.[0]?.id || null,
+        data
     };
 }
 
 /**
- * Send bulk messages with rate limiting
- * @param {object} tenant - Tenant object
+ * Send a free-form text message (within 24h window)
  */
-export async function sendBulkMessages(recipients, campaignName, templateParams = [], batchSize = 50, delayMs = 1000, languageCode = null, tenant) {
-    const results = {
-        successful: 0,
-        failed: 0,
-        errors: [],
-        messageIds: [],
+export async function sendTextMessage(phone, text, tenant) {
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) throw new Error(`Invalid phone number: ${phone}`);
+
+    const { token, phoneId } = getCredentials(tenant);
+
+    const payload = {
+        messaging_product: "whatsapp",
+        to: normalizedPhone,
+        type: "text",
+        text: { body: text }
     };
 
-    const seen = new Set();
-    const uniqueRecipients = [];
-    for (const r of recipients) {
-        const normalized = normalizePhone(r.phone);
-        if (!normalized) {
-            results.failed++;
-            results.errors.push({ phone: r.phone, name: r.name, error: 'Invalid phone number' });
-            continue;
+    const response = await fetch(`${WHATSAPP_API_URL}/${phoneId}/messages`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || `WhatsApp API error (${response.status})`);
+
+    return { messageId: data.messages?.[0]?.id || null, data };
+}
+
+/**
+ * Send a media message (image/document/video within 24h window)
+ */
+export async function sendMediaMessage(phone, mediaType, mediaUrl, caption, tenant) {
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) throw new Error(`Invalid phone number: ${phone}`);
+
+    const { token, phoneId } = getCredentials(tenant);
+
+    const payload = {
+        messaging_product: "whatsapp",
+        to: normalizedPhone,
+        type: mediaType,
+        [mediaType]: {
+            link: mediaUrl,
+            ...(caption && { caption })
         }
-        if (seen.has(normalized)) continue;
-        seen.add(normalized);
-        uniqueRecipients.push({ ...r, normalizedPhone: normalized });
-    }
+    };
 
-    for (let i = 0; i < uniqueRecipients.length; i += batchSize) {
-        const batch = uniqueRecipients.slice(i, i + batchSize);
+    const response = await fetch(`${WHATSAPP_API_URL}/${phoneId}/messages`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
 
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || `WhatsApp API error (${response.status})`);
+
+    return { messageId: data.messages?.[0]?.id || null, data };
+}
+
+/**
+ * Get media URL from Meta (for viewing inbound media)
+ */
+export async function getMediaUrl(mediaId, tenant) {
+    const { token } = getCredentials(tenant);
+
+    const response = await fetch(`${WHATSAPP_API_URL}/${mediaId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'Failed to get media URL');
+
+    return data.url;
+}
+
+/**
+ * Send bulk template messages with rate limiting
+ */
+export async function sendBulkMessages(recipients, campaignName, templateParams = [], batchSize = 0, delayMs = 100, languageCode = null, tenant) {
+    const results = { successful: 0, failed: 0, errors: [], messageIds: [] };
+
+    const validRecipients = recipients.filter(r => {
+        const normalized = normalizePhone(r.phone);
+        if (!normalized) { results.failed++; results.errors.push({ phone: r.phone, name: r.name, error: 'Invalid phone number' }); return false; }
+        return true;
+    }).map(r => ({ ...r, normalizedPhone: normalizePhone(r.phone) }));
+
+    // Send all at once (no batching unless explicitly set)
+    const actualBatch = batchSize > 0 ? batchSize : validRecipients.length;
+
+    for (let i = 0; i < validRecipients.length; i += actualBatch) {
+        const batch = validRecipients.slice(i, i + actualBatch);
         const batchPromises = batch.map(async (recipient) => {
             try {
-                const data = await sendTemplateMessage(
-                    recipient.normalizedPhone,
-                    campaignName,
-                    templateParams,
-                    recipient.name || 'Customer',
-                    languageCode,
-                    tenant
-                );
+                const data = await sendTemplateMessage(recipient.normalizedPhone, campaignName, templateParams, recipient.name || 'Customer', languageCode, tenant);
                 results.successful++;
-                results.messageIds.push({
-                    phone: recipient.normalizedPhone,
-                    name: recipient.name,
-                    messageId: data.messageId,
-                });
+                results.messageIds.push({ phone: recipient.normalizedPhone, name: recipient.name, messageId: data.messageId });
             } catch (error) {
                 results.failed++;
-                results.errors.push({
-                    phone: recipient.phone,
-                    name: recipient.name,
-                    error: error.message,
-                });
+                results.errors.push({ phone: recipient.phone, name: recipient.name, error: error.message });
             }
         });
 
         await Promise.all(batchPromises);
-
-        if (i + batchSize < uniqueRecipients.length) {
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-        }
+        if (i + batchSize < uniqueRecipients.length) await new Promise(resolve => setTimeout(resolve, delayMs));
     }
 
     return results;
 }
 
 /**
- * Upload media for template creation
- * @param {object} tenant - Tenant object
+ * Upload media for template creation (resumable upload)
  */
 export async function uploadMediaForTemplate(imageBuffer, mimeType = 'image/jpeg', fileName = 'template_header.jpg', tenant) {
     const { token } = getCredentials(tenant);
 
     const sessionUrl = `${WHATSAPP_API_URL}/app/uploads?file_length=${imageBuffer.length}&file_type=${encodeURIComponent(mimeType)}&file_name=${encodeURIComponent(fileName)}`;
-
-    const sessionRes = await fetch(sessionUrl, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const sessionRes = await fetch(sessionUrl, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
     const sessionData = await sessionRes.json();
+    if (!sessionRes.ok || !sessionData.id) throw new Error(sessionData.error?.message || 'Failed to create upload session');
 
-    if (!sessionRes.ok || !sessionData.id) {
-        throw new Error(sessionData.error?.message || 'Failed to create upload session');
-    }
-
-    const uploadSessionId = sessionData.id;
-
-    const uploadUrl = `${WHATSAPP_API_URL}/${uploadSessionId}`;
-    const uploadRes = await fetch(uploadUrl, {
+    const uploadRes = await fetch(`${WHATSAPP_API_URL}/${sessionData.id}`, {
         method: 'POST',
-        headers: {
-            'Authorization': `OAuth ${token}`,
-            'file_offset': '0',
-            'Content-Type': mimeType,
-        },
+        headers: { 'Authorization': `OAuth ${token}`, 'file_offset': '0', 'Content-Type': mimeType },
         body: imageBuffer,
     });
     const uploadData = await uploadRes.json();
-
-    if (!uploadRes.ok || !uploadData.h) {
-        throw new Error(uploadData.error?.message || 'Failed to upload media file');
-    }
+    if (!uploadRes.ok || !uploadData.h) throw new Error(uploadData.error?.message || 'Failed to upload media file');
 
     return uploadData.h;
 }
 
 /**
  * Create a new WhatsApp template
- * @param {object} tenant - Tenant object
  */
 export async function createTemplate({ name, category, language, bodyText, headerImageHandle, footerText, callButtonText, callButtonPhone }, tenant) {
     const { token, wabaId } = getCredentials(tenant);
-
-    if (!wabaId) {
-        throw new Error('WhatsApp Business Account ID not configured. Update in Settings.');
-    }
+    if (!wabaId) throw new Error('WhatsApp Business Account ID not configured.');
 
     const components = [];
 
     if (headerImageHandle) {
-        components.push({
-            type: 'HEADER',
-            format: 'IMAGE',
-            example: { header_handle: [headerImageHandle] }
-        });
+        components.push({ type: 'HEADER', format: 'IMAGE', example: { header_handle: [headerImageHandle] } });
     }
 
     const bodyComponent = { type: 'BODY', text: bodyText };
     const variableMatches = bodyText.match(/\{\{(\d+)\}\}/g);
     if (variableMatches && variableMatches.length > 0) {
-        bodyComponent.example = {
-            body_text: [variableMatches.map((_, i) => `Sample ${i + 1}`)]
-        };
+        bodyComponent.example = { body_text: [variableMatches.map((_, i) => `Sample ${i + 1}`)] };
     }
     components.push(bodyComponent);
 
-    if (footerText && footerText.trim()) {
-        components.push({ type: 'FOOTER', text: footerText.trim() });
-    }
+    if (footerText?.trim()) components.push({ type: 'FOOTER', text: footerText.trim() });
 
     if (callButtonPhone && callButtonText) {
         components.push({
@@ -406,56 +348,38 @@ export async function createTemplate({ name, category, language, bodyText, heade
 
     const response = await fetch(`${WHATSAPP_API_URL}/${wabaId}/message_templates`, {
         method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     });
 
     const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(data.error?.message || `Failed to create template (${response.status})`);
-    }
+    if (!response.ok) throw new Error(data.error?.message || `Failed to create template (${response.status})`);
 
     return { id: data.id, status: data.status, category: data.category };
 }
 
 /**
  * Fetch all templates from Meta
- * @param {object} tenant - Tenant object
  */
 export async function fetchTemplates(tenant) {
     const { token, wabaId } = getCredentials(tenant);
-
-    if (!wabaId) {
-        throw new Error('WhatsApp Business Account ID not configured. Update in Settings.');
-    }
+    if (!wabaId) throw new Error('WhatsApp Business Account ID not configured.');
 
     const response = await fetch(`${WHATSAPP_API_URL}/${wabaId}/message_templates?limit=100`, {
         headers: { 'Authorization': `Bearer ${token}` }
     });
 
     const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(data.error?.message || 'Failed to fetch templates');
-    }
-
+    if (!response.ok) throw new Error(data.error?.message || 'Failed to fetch templates');
     return data.data || [];
 }
 
 /**
  * Delete a template from Meta
- * @param {object} tenant - Tenant object
  */
 export async function deleteTemplate(templateName, tenant) {
     const { token, wabaId } = getCredentials(tenant);
-
-    if (!wabaId) {
-        throw new Error('WhatsApp Business Account ID not configured. Update in Settings.');
-    }
+    if (!wabaId) throw new Error('WhatsApp Business Account ID not configured.');
 
     const response = await fetch(`${WHATSAPP_API_URL}/${wabaId}/message_templates?name=${encodeURIComponent(templateName)}`, {
         method: 'DELETE',
@@ -463,20 +387,12 @@ export async function deleteTemplate(templateName, tenant) {
     });
 
     const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(data.error?.message || 'Failed to delete template');
-    }
-
+    if (!response.ok) throw new Error(data.error?.message || 'Failed to delete template');
     return data;
 }
 
 export default {
-    normalizePhone,
-    sendTemplateMessage,
-    sendBulkMessages,
-    uploadMediaForTemplate,
-    createTemplate,
-    fetchTemplates,
-    deleteTemplate,
+    normalizePhone, sendTemplateMessage, sendTextMessage, sendMediaMessage,
+    getMediaUrl, sendBulkMessages, uploadMediaForTemplate, createTemplate,
+    fetchTemplates, deleteTemplate,
 };

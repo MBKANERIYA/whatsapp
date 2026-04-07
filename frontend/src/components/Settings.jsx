@@ -8,8 +8,8 @@ import Icon from './Icons';
  */
 export default function Settings() {
     const {
-        tenantSettings, subscriptionInfo,
-        fetchTenantSettings, fetchSubscriptionInfo,
+        tenantSettings,
+        fetchTenantSettings,
         updateTenantProfile, updateWhatsAppConfig, disconnectWhatsApp,
         showToast, tenant
     } = useStore();
@@ -31,7 +31,6 @@ export default function Settings() {
 
     useEffect(() => {
         fetchTenantSettings();
-        fetchSubscriptionInfo();
     }, []);
 
     useEffect(() => {
@@ -199,7 +198,7 @@ export default function Settings() {
 
                         {/* Firm URL (read only) */}
                         <div className="form-group">
-                            <label className="form-label">Your CRM URL</label>
+                            <label className="form-label">Your Platform URL</label>
                             <div style={{
                                 padding: 'var(--space-2) var(--space-3)',
                                 background: 'var(--bg-secondary)',
@@ -208,7 +207,7 @@ export default function Settings() {
                                 fontFamily: 'monospace',
                                 color: 'var(--accent-primary)',
                             }}>
-                                {tenantSettings?.slug || '...'}.procrm.in
+                                {tenantSettings?.slug || '...'}.yourdomain.com
                             </div>
                         </div>
 
@@ -425,7 +424,7 @@ export default function Settings() {
                                             <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
                                                 <li style={{ padding: '4px 0' }}>👥 {plan.max_users} team members</li>
                                                 <li style={{ padding: '4px 0' }}>{plan.whatsapp_enabled ? '✅' : '❌'} WhatsApp Broadcast</li>
-                                                <li style={{ padding: '4px 0' }}>📊 Unlimited leads</li>
+                                                <li style={{ padding: '4px 0' }}>📊 Unlimited contacts</li>
                                             </ul>
                                             {plan.price_yearly > 0 && (
                                                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--accent-success)', marginTop: 'var(--space-2)' }}>
@@ -438,7 +437,7 @@ export default function Settings() {
                             </div>
 
                             <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 'var(--space-4)' }}>
-                                To upgrade or change plans, contact support or use the billing portal. All plans include unlimited leads and projects.
+                                To upgrade or change plans, contact support. All plans include unlimited contacts and broadcasts. Meta charges for messages separately.
                             </p>
                         </div>
                     )}
