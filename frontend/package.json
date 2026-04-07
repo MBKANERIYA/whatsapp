@@ -1,7 +1,7 @@
 {
-  "name": "crm-mahalaxmi-frontend",
+  "name": "whatsapp-broadcast-frontend",
   "version": "1.0.0",
-  "description": "Fast, Sustainable, Reliable CRM for Real Estate",
+  "description": "WhatsApp Broadcast SaaS - Frontend",
   "type": "module",
   "scripts": {
     "dev": "vite",

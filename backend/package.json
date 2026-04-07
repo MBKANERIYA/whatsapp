@@ -1,7 +1,7 @@
 {
-    "name": "crm-mahalaxmi-api",
+    "name": "whatsapp-broadcast-api",
     "version": "1.0.0",
-    "description": "CRM Mahalaxmi - Web API for Hostinger deployment",
+    "description": "WhatsApp Broadcast SaaS - Backend API",
     "main": "src/index.js",
     "type": "module",
     "scripts": {
