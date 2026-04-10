@@ -1,0 +1,56 @@
+import { Router } from 'express';
+import nodemailer from 'nodemailer';
+
+const router = Router();
+
+// SMTP transport for broadcast@innodify.in (Hostinger)
+const transporter = nodemailer.createTransport({
+    host: 'smtp.hostinger.com',
+    port: 465,
+    secure: true,
+    auth: {
+        user: process.env.SMTP_USER || 'broadcast@innodify.in',
+        pass: process.env.SMTP_PASS || '',
+    },
+});
+
+/**
+ * POST /api/v1/leads
+ * Public — collects lead info and emails it to broadcast@innodify.in
+ */
+router.post('/', async (req, res) => {
+    try {
+        const { name, email, phone, business } = req.body;
+
+        if (!name || !email) {
+            return res.status(400).json({ error: 'Name and email are required' });
+        }
+
+        const mailBody = `
+New signup request from WhatsApp Broadcast landing page:
+
+Name:     ${name}
+Email:    ${email}
+Phone:    ${phone || 'Not provided'}
+Business: ${business || 'Not provided'}
+
+Submitted at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+        `.trim();
+
+        await transporter.sendMail({
+            from: `"WhatsApp Broadcast" <${process.env.SMTP_USER || 'broadcast@innodify.in'}>`,
+            to: process.env.SMTP_USER || 'broadcast@innodify.in',
+            subject: `New Lead: ${name} — ${business || email}`,
+            text: mailBody,
+            replyTo: email,
+        });
+
+        res.json({ success: true, message: 'We will contact you shortly!' });
+    } catch (error) {
+        console.error('[LEADS] Email send error:', error.message);
+        // Still return success to the user — don't expose email errors
+        res.json({ success: true, message: 'Thank you! We will get back to you soon.' });
+    }
+});
+
+export default router;

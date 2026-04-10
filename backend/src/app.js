@@ -15,6 +15,7 @@ import whatsappRoutes from './routes/whatsapp.js';
 import whatsappChatRoutes from './routes/whatsapp-chat.js';
 import contactsRoutes from './routes/contacts.js';
 import tenantSettingsRoutes from './routes/tenant-settings.js';
+import leadsRoutes from './routes/leads.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -242,6 +243,9 @@ async function processIncomingMessage(msg, contacts, phoneNumberId) {
 
     console.log(`[Chat] Incoming from ${fromPhone}: "${previewText}" (tenant: ${tenantId})`);
 }
+
+// Public lead capture (no tenant/auth needed)
+app.use('/api/v1/leads', leadsRoutes);
 
 // ============================================================
 // TENANT-SCOPED API ROUTES
