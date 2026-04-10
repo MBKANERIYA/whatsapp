@@ -19,6 +19,7 @@ export default function WhatsAppChat() {
     const [templateParams, setTemplateParams] = useState(['', '', '']);
     const messagesEndRef = useRef(null);
     const pollRef = useRef(null);
+    const [mobileShowChat, setMobileShowChat] = useState(false);
 
     // Initial load + polling
     useEffect(() => {
@@ -47,6 +48,7 @@ export default function WhatsAppChat() {
 
     const openConversation = async (convId) => {
         setSelectedConvId(convId);
+        setMobileShowChat(true);
         await fetchChatMessages(convId);
         await markConversationRead(convId);
     };
@@ -131,9 +133,9 @@ export default function WhatsAppChat() {
                 </div>
             </div>
 
-            <div style={{ flex: 1, display: 'flex', gap: '0', border: '1px solid var(--border, #e2e8f0)', borderRadius: '12px', overflow: 'hidden', minHeight: 0 }}>
+            <div className="chat-layout" style={{ flex: 1, display: 'flex', gap: '0', border: '1px solid var(--border, #e2e8f0)', borderRadius: '12px', overflow: 'hidden', minHeight: 0 }}>
                 {/* Left: Conversation List */}
-                <div style={{ width: '340px', flexShrink: 0, borderRight: '1px solid var(--border, #e2e8f0)', display: 'flex', flexDirection: 'column', background: 'var(--surface, #fff)' }}>
+                <div className={`chat-sidebar${mobileShowChat ? ' hidden-mobile' : ''}`} style={{ width: '340px', flexShrink: 0, borderRight: '1px solid var(--border, #e2e8f0)', display: 'flex', flexDirection: 'column', background: 'var(--surface, #fff)' }}>
                     {/* Search */}
                     <div style={{ padding: '12px', borderBottom: '1px solid var(--border, #e2e8f0)' }}>
                         <div className="search-bar" style={{ margin: 0 }}>
@@ -197,7 +199,7 @@ export default function WhatsAppChat() {
                 </div>
 
                 {/* Right: Chat Area */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#f0f2f5' }}>
+                <div className={`chat-area${!mobileShowChat ? ' hidden-mobile' : ''}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#f0f2f5' }}>
                     {!selectedConvId ? (
                         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', opacity: 0.4 }}>
                             <Icon name="chat" size={64} />
@@ -211,9 +213,15 @@ export default function WhatsAppChat() {
                                 borderBottom: '1px solid var(--border, #e2e8f0)',
                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                             }}>
-                                <div>
-                                    <div style={{ fontWeight: 600, fontSize: '15px' }}>{conv?.contact_name || conv?.phone}</div>
-                                    <div style={{ fontSize: '12px', opacity: 0.5, fontFamily: 'monospace' }}>{conv?.phone}</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <button className="chat-back-btn btn-icon" onClick={() => setMobileShowChat(false)}
+                                        style={{ display: 'none' }} title="Back">
+                                        <Icon name="arrow-left" size={20} />
+                                    </button>
+                                    <div>
+                                        <div style={{ fontWeight: 600, fontSize: '15px' }}>{conv?.contact_name || conv?.phone}</div>
+                                        <div style={{ fontSize: '12px', opacity: 0.5, fontFamily: 'monospace' }}>{conv?.phone}</div>
+                                    </div>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                     {isWindowOpen ? (

@@ -694,7 +694,31 @@ tr:last-child td { border-bottom: none; }
 .sidebar-header-mobile { display: block; }
 .mobile-close-btn { display: none; }
 
+
+/* ==================== Tablet Breakpoint (≤1024px) ==================== */
+
+@media (max-width: 1024px) {
+  /* Template builder: stack preview below form */
+  [style*="gridTemplateColumns: '1fr 340px'"],
+  [style*="grid-template-columns: 1fr 340px"],
+  .tpl-builder-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* 3-col form rows → 2-col */
+  [style*="auto / 1fr 1fr 1fr"] {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Chat inbox: narrower sidebar */
+  .chat-sidebar { width: 280px !important; }
+}
+
+
+/* ==================== Mobile Breakpoint (≤768px) ==================== */
+
 @media (max-width: 768px) {
+  /* ── Layout Shell ── */
   .app-layout {
     grid-template-columns: 1fr;
     max-width: 100%;
@@ -702,7 +726,7 @@ tr:last-child td { border-bottom: none; }
   }
 
   .main-content {
-    padding: var(--space-4);
+    padding: var(--space-3);
     max-width: 100%;
     padding-bottom: calc(120px + env(safe-area-inset-bottom));
   }
@@ -737,37 +761,102 @@ tr:last-child td { border-bottom: none; }
 
   .mobile-close-btn { display: flex; font-size: 1.25rem; }
 
-  .form-row { grid-template-columns: 1fr; }
-
-  .modal, .modal-backdrop .modal {
-    max-width: calc(100% - 32px) !important;
-    margin: 16px;
-    max-height: calc(100vh - 32px);
-  }
-
-  .modal-body { padding: var(--space-4); }
-  .modal-header, .modal-footer { padding: var(--space-4); }
-  .modal-body [style*="gridTemplateColumns"] { grid-template-columns: 1fr !important; }
-
-  .stats-grid { grid-template-columns: 1fr; gap: var(--space-3); }
-  .two-col-grid { grid-template-columns: 1fr !important; }
-
-  .table-container {
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-  }
-
-  th, td { padding: var(--space-3); white-space: nowrap; }
-
+  /* ── Typography ── */
   html { font-size: 14px; }
   h1 { font-size: var(--text-xl) !important; }
   h2 { font-size: var(--text-lg) !important; }
 
+  .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .search-bar { width: 100%; }
   .mobile-only { display: block !important; }
   .desktop-only { display: none !important; }
 
-  .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .search-bar { width: 100%; }
+  /* ── ALL Inline Grid Overrides ── */
+  /* Force any inline 3-col grid to 1-col on mobile */
+  [style*="1fr 1fr 1fr"] { grid-template-columns: 1fr !important; }
+  /* Force any inline 2-col grid to 1-col on mobile */
+  [style*="1fr 1fr"] { grid-template-columns: 1fr !important; }
+  /* Template builder side-by-side → stacked */
+  [style*="1fr 340px"] { grid-template-columns: 1fr !important; }
+
+  /* ── Forms ── */
+  .form-row { grid-template-columns: 1fr; }
+  .form-input, .form-select, select.form-input { font-size: 16px; } /* prevent iOS zoom */
+  textarea.form-input { font-size: 16px; }
+
+  /* ── Buttons ── */
+  .btn { min-height: 44px; padding: 10px 16px; } /* touch target */
+  .tab-btn { padding: 10px 12px; font-size: 13px; }
+
+  /* ── Modals ── */
+  .modal, .modal-backdrop .modal {
+    max-width: calc(100% - 24px) !important;
+    margin: 12px;
+    max-height: calc(100vh - 24px);
+  }
+  .modal-body { padding: var(--space-3); }
+  .modal-header, .modal-footer { padding: var(--space-3); }
+  .modal-body [style*="gridTemplateColumns"] { grid-template-columns: 1fr !important; }
+
+  /* ── Stats/Grids ── */
+  .stats-grid { grid-template-columns: 1fr !important; gap: var(--space-3); }
+  .two-col-grid { grid-template-columns: 1fr !important; }
+
+  /* ── Tables ── */
+  .table-container {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  th, td { padding: var(--space-3); white-space: nowrap; font-size: 13px; }
+
+  /* ── Cards ── */
+  .card { padding: var(--space-4) !important; border-radius: var(--radius-md); }
+
+  /* ── Chat Inbox (WhatsAppChat) ── */
+  /* On mobile, conversations list takes full width; chat area slides in */
+  .chat-layout {
+    flex-direction: column !important;
+  }
+  .chat-sidebar {
+    width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border-color);
+    max-height: 45vh;
+  }
+  .chat-area {
+    flex: 1;
+    min-height: 55vh;
+  }
+  .chat-sidebar.hidden-mobile { display: none !important; }
+  .chat-area.hidden-mobile { display: none !important; }
+  .chat-back-btn { display: flex !important; }
+
+  /* ── Template Builder Preview ── */
+  /* Phone mockup full width on mobile */
+  .tpl-preview-phone {
+    max-width: 320px;
+    margin: 0 auto;
+  }
+
+  /* ── Broadcast Tab ── */
+  .broadcast-controls {
+    flex-direction: column !important;
+    gap: var(--space-3) !important;
+  }
+  .broadcast-controls .btn { width: 100%; }
+
+  /* ── Settings Tabs ── */
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
+  .tab-btn { white-space: nowrap; flex-shrink: 0; }
+
+  /* ── Status badges ── */
+  .status-badge { font-size: 11px; padding: 2px 8px; }
+
+  /* ── Misc spacing ── */
+  .info-box { font-size: 12px; padding: var(--space-2); }
+  .tag-chip { font-size: 10px; padding: 2px 8px; }
 }
 
 
