@@ -26,13 +26,28 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Name and email are required' });
         }
 
+        // Input validation (security)
+        if (name.length > 100 || email.length > 254) {
+            return res.status(400).json({ error: 'Input too long' });
+        }
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+            return res.status(400).json({ error: 'Invalid email format' });
+        }
+
+        // Sanitize inputs to prevent injection in email body
+        const sanitize = (str) => (str || '').replace(/[<>"'&]/g, '').substring(0, 200);
+        const safeName = sanitize(name);
+        const safeEmail = sanitize(email);
+        const safePhone = sanitize(phone);
+        const safeBusiness = sanitize(business);
+
         const mailBody = `
 New signup request from WhatsApp Broadcast landing page:
 
-Name:     ${name}
-Email:    ${email}
-Phone:    ${phone || 'Not provided'}
-Business: ${business || 'Not provided'}
+Name:     ${safeName}
+Email:    ${safeEmail}
+Phone:    ${safePhone || 'Not provided'}
+Business: ${safeBusiness || 'Not provided'}
 
 Submitted at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
         `.trim();
@@ -40,9 +55,9 @@ Submitted at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
         await transporter.sendMail({
             from: `"WhatsApp Broadcast" <${process.env.SMTP_USER || 'broadcast@innodify.in'}>`,
             to: process.env.SMTP_USER || 'broadcast@innodify.in',
-            subject: `New Lead: ${name} — ${business || email}`,
+            subject: `New Lead: ${safeName} — ${safeBusiness || safeEmail}`,
             text: mailBody,
-            replyTo: email,
+            replyTo: safeEmail,
         });
 
         res.json({ success: true, message: 'We will contact you shortly!' });
