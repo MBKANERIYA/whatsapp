@@ -27,3 +27,9 @@ Thumbs.db
 
 # Vite temp files
 vite.config.js.timestamp-*
+
+# Sensitive credentials (keep local only)
+knowledge-base/CREDENTIALS_AND_INFRA.md
+
+# Uploads
+backend/uploads/
