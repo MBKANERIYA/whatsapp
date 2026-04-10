@@ -1,11 +1,7 @@
 /**
- * Public Signup Route
+ * Public Routes — No tenant resolution, no auth required
  * 
- * This route handles self-service tenant creation + admin user provisioning.
- * It is mounted BEFORE the tenant middleware so new users can sign up
- * without an existing tenant context.
- * 
- * POST /api/v1/public/signup
+ * POST /api/v1/public/signup — Self-service tenant creation + admin user
  */
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
@@ -24,6 +20,11 @@ router.post('/signup', async (req, res) => {
 
         if (password.length < 6) {
             return res.status(400).json({ error: 'Password must be at least 6 characters' });
+        }
+
+        // Validate email format
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+            return res.status(400).json({ error: 'Invalid email format' });
         }
 
         // Generate slug from firm name
@@ -47,11 +48,13 @@ router.post('/signup', async (req, res) => {
         // Create tenant with 14-day trial
         const trialEnds = new Date();
         trialEnds.setDate(trialEnds.getDate() + 14);
+        // MySQL DATETIME format: YYYY-MM-DD HH:MM:SS
+        const trialEndsStr = trialEnds.toISOString().slice(0, 19).replace('T', ' ');
 
         const tenantResult = await run(
             `INSERT INTO tenants (name, slug, email, subscription_plan, subscription_status, trial_ends_at)
              VALUES (?, ?, ?, 'trial', 'active', ?)`,
-            [firmName, slug, email, trialEnds.toISOString()]
+            [firmName, slug, email, trialEndsStr]
         );
         const tenantId = tenantResult.lastInsertRowid;
 
@@ -77,8 +80,8 @@ router.post('/signup', async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('Signup error:', error);
-        res.status(500).json({ error: 'Server error' });
+        console.error('[SIGNUP ERROR]', error.message, error.stack);
+        res.status(500).json({ error: 'Signup failed. Please try again.' });
     }
 });
 

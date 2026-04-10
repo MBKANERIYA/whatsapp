@@ -96,13 +96,14 @@ router.post('/signup', async (req, res) => {
         // Create tenant with 14-day trial
         const trialEnds = new Date();
         trialEnds.setDate(trialEnds.getDate() + 14);
+        const trialEndsStr = trialEnds.toISOString().slice(0, 19).replace('T', ' ');
 
         const tenantResult = await run(
-            `INSERT INTO tenants (name, slug, subscription_plan, subscription_status, trial_ends_at)
-             VALUES (?, ?, 'trial', 'active', ?)`,
-            [firmName, slug, trialEnds.toISOString()]
+            `INSERT INTO tenants (name, slug, email, subscription_plan, subscription_status, trial_ends_at)
+             VALUES (?, ?, ?, 'trial', 'active', ?)`,
+            [firmName, slug, email, trialEndsStr]
         );
-        const tenantId = tenantResult.insertId || tenantResult.lastInsertRowid;
+        const tenantId = tenantResult.lastInsertRowid;
 
         // Create admin user
         const passwordHash = bcrypt.hashSync(password, 10);
