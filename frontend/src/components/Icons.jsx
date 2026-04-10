@@ -48,7 +48,7 @@ const ICONS = {
     info: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M12 16v-4M12 8h.01',
     'refresh-cw': 'M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
 
-    // Real Estate & Property
+    // Location & Layout
     home: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z',
     building: 'M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18M6 12H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2M18 9h2a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2',
     'building-2': 'M6 22V2h12v20M2 22h20M6 6h.01M6 10h.01M6 14h.01M6 18h.01M10 6h.01M10 10h.01M10 14h.01M10 18h.01M14 6h.01M14 10h.01M14 14h.01M14 18h.01',
