@@ -16,8 +16,8 @@ export default function Sidebar({ isOpen, onClose }) {
         onClose?.();
     };
 
-    const logoUrl = tenant?.logo_url || '/assets/M.png';
-    const firmName = tenant?.name || 'WhatsApp Platform';
+    const logoUrl = tenant?.logo_url || null;
+    const firmName = tenant?.name || 'WhatsApp Broadcast';
 
     return (
         <aside className={`sidebar ${isOpen ? 'sidebar--open' : ''}`}>

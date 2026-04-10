@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useStore } from './stores/store';
 import Icon from './components/Icons';
-import Login from './components/Login';
+import LandingPage from './components/LandingPage';
+import AuthPage from './components/Login';
 import Sidebar from './components/Sidebar';
 import Contacts from './components/Contacts';
 import WhatsAppBroadcast from './components/WhatsAppBroadcast';
@@ -12,58 +13,69 @@ import Toast from './components/Toast';
 export default function App() {
     const { isAuthenticated, currentView, tenant } = useStore();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [page, setPage] = useState('landing'); // 'landing' | 'login' | 'register'
 
-    if (!isAuthenticated) {
+    // If authenticated, show dashboard
+    if (isAuthenticated) {
+        const renderView = () => {
+            switch (currentView) {
+                case 'contacts': return <Contacts />;
+                case 'broadcast': return <WhatsAppBroadcast />;
+                case 'chat': return <WhatsAppChat />;
+                case 'settings': return <Settings />;
+                default: return <Contacts />;
+            }
+        };
+
+        const logoUrl = tenant?.logo_url || null;
+        const firmName = tenant?.name || 'WhatsApp Broadcast';
+
+        return (
+            <div className="app-layout">
+                <Sidebar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
+
+                <header className="mobile-header">
+                    <button className="btn-icon" onClick={() => setIsMobileMenuOpen(true)}>
+                        <Icon name="menu" size={22} />
+                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {logoUrl && <img src={logoUrl} alt={firmName} style={{ height: '40px', width: 'auto' }} />}
+                        <span style={{ fontWeight: 600, fontSize: '14px' }}>{firmName}</span>
+                    </div>
+                    <div style={{ width: '32px' }}></div>
+                </header>
+
+                <main className="main-content">
+                    {renderView()}
+                </main>
+
+                {isMobileMenuOpen && (
+                    <div className="sidebar-overlay" onClick={() => setIsMobileMenuOpen(false)} />
+                )}
+
+                <Toast />
+            </div>
+        );
+    }
+
+    // Not authenticated — show landing or auth
+    if (page === 'login' || page === 'register') {
         return (
             <>
-                <Login />
+                <AuthPage
+                    initialMode={page}
+                    onBack={() => setPage('landing')}
+                />
                 <Toast />
             </>
         );
     }
 
-    const renderView = () => {
-        switch (currentView) {
-            case 'contacts':
-                return <Contacts />;
-            case 'broadcast':
-                return <WhatsAppBroadcast />;
-            case 'chat':
-                return <WhatsAppChat />;
-            case 'settings':
-                return <Settings />;
-            default:
-                return <Contacts />;
-        }
-    };
-
-    const logoUrl = tenant?.logo_url || '/assets/M.png';
-    const firmName = tenant?.name || 'WhatsApp Platform';
-
+    // Landing page
     return (
-        <div className="app-layout">
-            <Sidebar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
-
-            <header className="mobile-header">
-                <button className="btn-icon" onClick={() => setIsMobileMenuOpen(true)}>
-                    <Icon name="menu" size={22} />
-                </button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <img src={logoUrl} alt={firmName} style={{ height: '40px', width: 'auto' }} />
-                    <span style={{ fontWeight: 600, fontSize: '14px' }}>{firmName}</span>
-                </div>
-                <div style={{ width: '32px' }}></div>
-            </header>
-
-            <main className="main-content">
-                {renderView()}
-            </main>
-
-            {isMobileMenuOpen && (
-                <div className="sidebar-overlay" onClick={() => setIsMobileMenuOpen(false)} />
-            )}
-
+        <>
+            <LandingPage onNavigate={(p) => setPage(p)} />
             <Toast />
-        </div>
+        </>
     );
 }

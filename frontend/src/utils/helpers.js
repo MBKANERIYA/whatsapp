@@ -1,5 +1,5 @@
 /**
- * Utility helpers for CRM Mahalaxmi
+ * Utility helpers for WhatsApp Broadcast
  * Centralizes common functions for consistency across components
  */
 

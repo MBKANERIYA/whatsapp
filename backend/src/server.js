@@ -9,7 +9,7 @@ const startServer = async () => {
 
         // Start server
         app.listen(config.port, () => {
-            console.log(`ProCRM SaaS API running on port ${config.port}`);
+            console.log(`WhatsApp Broadcast API running on port ${config.port}`);
             console.log(`Environment: ${config.nodeEnv}`);
         });
     } catch (error) {

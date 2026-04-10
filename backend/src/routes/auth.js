@@ -60,45 +60,71 @@ router.post('/login', async (req, res) => {
 });
 
 /**
- * POST /api/v1/auth/register
- * Admin-only: create new user accounts within the tenant
+ * POST /api/v1/auth/signup
+ * Public self-service signup — creates a new tenant + admin user
  */
-router.post('/register', authMiddleware, checkUserLimit, async (req, res) => {
+router.post('/signup', async (req, res) => {
     try {
-        if (!req.user || req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required to create users' });
-        }
+        const { name, firmName, email, password } = req.body;
 
-        const { name, email, password } = req.body;
-        const role = ['admin', 'agent'].includes(req.body.role) ? req.body.role : 'agent';
-
-        if (!name || !email || !password) {
-            return res.status(400).json({ error: 'Name, email, and password required' });
+        if (!name || !firmName || !email || !password) {
+            return res.status(400).json({ error: 'Name, business name, email, and password are required' });
         }
 
         if (password.length < 6) {
             return res.status(400).json({ error: 'Password must be at least 6 characters' });
         }
 
-        // Check if email already exists within this tenant
-        const existing = await get(
-            'SELECT id FROM users WHERE email = ? AND tenant_id = ?',
-            [email, req.tenantId]
-        );
-        if (existing) {
-            return res.status(409).json({ error: 'Email already registered in your firm' });
+        // Generate slug from firm name
+        const slug = firmName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        if (!slug) {
+            return res.status(400).json({ error: 'Invalid business name' });
         }
 
-        const passwordHash = bcrypt.hashSync(password, 10);
+        // Check if slug already exists
+        const existingTenant = await get('SELECT id FROM tenants WHERE slug = ?', [slug]);
+        if (existingTenant) {
+            return res.status(409).json({ error: 'A business with a similar name already exists. Try a different name.' });
+        }
 
-        const result = await run(
-            'INSERT INTO users (tenant_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
-            [req.tenantId, name, email, passwordHash, role]
+        // Check if email already exists globally
+        const existingUser = await get('SELECT id FROM users WHERE email = ?', [email]);
+        if (existingUser) {
+            return res.status(409).json({ error: 'This email is already registered. Try signing in.' });
+        }
+
+        // Create tenant with 14-day trial
+        const trialEnds = new Date();
+        trialEnds.setDate(trialEnds.getDate() + 14);
+
+        const tenantResult = await run(
+            `INSERT INTO tenants (name, slug, subscription_plan, subscription_status, trial_ends_at)
+             VALUES (?, ?, 'trial', 'active', ?)`,
+            [firmName, slug, trialEnds.toISOString()]
         );
+        const tenantId = tenantResult.insertId || tenantResult.lastInsertRowid;
 
-        res.status(201).json({ id: result.lastInsertRowid });
+        // Create admin user
+        const passwordHash = bcrypt.hashSync(password, 10);
+        const userResult = await run(
+            'INSERT INTO users (tenant_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
+            [tenantId, name, email, passwordHash, 'admin']
+        );
+        const userId = userResult.insertId || userResult.lastInsertRowid;
+
+        // Auto-login: generate token
+        const token = generateToken(userId, email, 'admin', tenantId);
+
+        res.status(201).json({
+            token,
+            user: { id: userId, name, email, role: 'admin' },
+            tenant: {
+                id: tenantId, name: firmName, slug,
+                subscription_plan: 'trial', subscription_status: 'active',
+            },
+        });
     } catch (error) {
-        console.error('Register error:', error);
+        console.error('Signup error:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });

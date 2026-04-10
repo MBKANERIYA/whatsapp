@@ -124,6 +124,25 @@ export const useStore = create(
                 set({ user: null, tenant: null, isAuthenticated: false, contacts: [], currentView: 'contacts' });
             },
 
+            register: async (name, firmName, email, password) => {
+                try {
+                    set({ isLoading: true, error: null });
+                    const data = await api('/auth/signup', {
+                        method: 'POST',
+                        body: JSON.stringify({ name, firmName, email, password }),
+                    });
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    if (data.tenant) localStorage.setItem('tenant_slug', data.tenant.slug);
+
+                    set({ user: data.user, tenant: data.tenant || null, isAuthenticated: true, isLoading: false, error: null });
+                    return true;
+                } catch (error) {
+                    set({ error: error.message, isLoading: false });
+                    return false;
+                }
+            },
+
             // ============================================================
             // TENANT SETTINGS
             // ============================================================

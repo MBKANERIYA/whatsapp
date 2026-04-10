@@ -4,8 +4,8 @@ import config from '../config.js';
 /**
  * Tenant Resolution Middleware
  * 
- * Resolves the current tenant from the request subdomain.
- * Example: firm-a.procrm.in → slug = "firm-a"
+ * Resolves the current tenant from the request subdomain or header.
+ * Example: firm-a.broadcast.innodify.in → slug = "firm-a"
  * 
  * Injects into request:
  *   - req.tenant   → Full tenant object from DB
@@ -13,28 +13,24 @@ import config from '../config.js';
  */
 export const resolveTenant = async (req, res, next) => {
   try {
-    // Extract slug from subdomain
-    const host = req.hostname; // e.g., "firm-a.procrm.in" or "localhost"
+    const host = req.hostname;
     let slug;
 
     if (config.nodeEnv === 'development') {
-      // In development, use x-tenant-slug header or default to 'default'
       slug = req.headers['x-tenant-slug'] || 'default';
     } else {
-      // In production, extract subdomain from hostname
-      // "firm-a.procrm.in" → "firm-a"
-      // "admin.procrm.in" → "admin" (super admin panel)
-      const parts = host.split('.');
-      if (parts.length >= 3) {
-        slug = parts[0]; // subdomain
-      } else {
-        // Bare domain (procrm.in) — could be landing page
-        slug = req.headers['x-tenant-slug'] || null;
+      // In production, use header (sent by frontend) or extract subdomain
+      slug = req.headers['x-tenant-slug'] || null;
+      if (!slug) {
+        const parts = host.split('.');
+        if (parts.length >= 3) {
+          slug = parts[0];
+        }
       }
     }
 
     if (!slug) {
-      return res.status(400).json({ error: 'Invalid tenant. Use a subdomain like firm-name.procrm.in' });
+      return res.status(400).json({ error: 'Tenant not identified. Please sign in again.' });
     }
 
     // Skip tenant resolution for super admin panel
@@ -48,7 +44,7 @@ export const resolveTenant = async (req, res, next) => {
     const tenant = await getTenantBySlug(slug);
 
     if (!tenant) {
-      return res.status(404).json({ error: 'Firm not found. Check your URL.' });
+      return res.status(404).json({ error: 'Account not found. Check your URL.' });
     }
 
     // Check subscription status
@@ -89,8 +85,6 @@ export const resolveTenant = async (req, res, next) => {
 
 /**
  * Super Admin Only Middleware
- * Checks if the authenticated user is a platform super admin.
- * Super admins are identified by email in config.superAdminEmails.
  */
 export const superAdminOnly = (req, res, next) => {
   if (!req.user) {
