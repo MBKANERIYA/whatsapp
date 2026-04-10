@@ -1,69 +1,109 @@
-# Real Estate CRM SaaS
+# WhatsApp Broadcast SaaS
 
-Multi-tenant CRM platform for real estate firms with direct Meta WhatsApp Cloud API integration.
+A multi-tenant WhatsApp marketing and chat platform built with Node.js, Preact, and the Meta Cloud API.
+
+## Features
+
+- **📇 Contact Management** — Unified contacts with location, ticket size, tags, CSV import
+- **📢 WhatsApp Broadcast** — Send template messages to filtered contacts (by tag, location, budget)
+- **💬 Chat Inbox** — Two-way WhatsApp messaging with 24-hour window enforcement
+- **⚙️ Settings** — Firm profile, WhatsApp credential management, subscription plans
+- **🏢 Multi-Tenant** — Each customer gets isolated data, uses their own Meta API credentials
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| Frontend | Preact + Vite + Zustand |
+| Backend | Express.js (Node.js 20+) |
+| Database | MySQL 8.0 |
+| WhatsApp | Meta Cloud API v21.0 |
+| Hosting | Hostinger VPS (Nginx + PM2) |
 
 ## Architecture
 
 ```
-realestate-crm-saas/
-├── backend/          # Express.js API (Node.js 18+)
-│   ├── src/
-│   │   ├── app.js          # Express app setup
-│   │   ├── server.js       # Server entry point
-│   │   ├── config.js       # Environment config
-│   │   ├── database.js     # MySQL connection + migrations
-│   │   ├── middleware/     # Auth, tenant resolution
-│   │   ├── routes/         # API route handlers
-│   │   └── services/       # WhatsApp, external services
-│   ├── package.json
-│   └── .env.example
-├── frontend/         # Preact SPA (Vite)
-│   ├── src/
-│   │   ├── components/     # UI components
-│   │   ├── stores/         # Zustand state management
-│   │   └── index.jsx       # App entry
-│   ├── package.json
-│   └── vite.config.js
-└── README.md
+Customer's Meta Account ──→ Our Platform ──→ Contacts / Broadcast / Chat
+         ↑                                              │
+         └──── Webhook (incoming messages) ─────────────┘
 ```
 
-## Tech Stack
+- **Customers provide their own Meta WhatsApp Business API credentials**
+- **Meta bills customers directly** for message usage
+- **We charge a platform subscription fee** (SaaS revenue)
 
-- **Frontend:** Preact + Vite + Zustand
-- **Backend:** Express.js + MySQL (mysql2)
-- **Auth:** JWT (bcryptjs)
-- **WhatsApp:** Direct Meta Cloud API (per-tenant credentials)
-- **Hosting:** DigitalOcean (App Platform / Droplet + Managed MySQL)
+## Quick Start
 
-## Setup
+### Prerequisites
+- Node.js 18+
+- MySQL 8.0+
+
+### Setup
 
 ```bash
+# Clone
+git clone https://github.com/shivanshu407/whatsapp-broadcast-saas.git
+cd whatsapp-broadcast-saas
+
 # Backend
-cd backend
-cp .env.example .env    # Edit with your credentials
-npm install
+cd backend && npm install
+cp .env.example .env  # Edit with your DB credentials
 npm run dev
 
-# Frontend
-cd frontend
-npm install
+# Frontend (new terminal)
+cd frontend && npm install
 npm run dev
 ```
 
-## Key Features
+### Environment Variables
 
-- Lead management with pipeline stages
-- Client conversion tracking
-- WhatsApp broadcast via direct Meta API (no middleman charges)
-- Team management with role-based access
-- Site visit scheduling
-- Follow-up reminders
-- Inventory/project management
-- Dashboard analytics
+```env
+PORT=3000
+NODE_ENV=development
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=whatsapp_broadcast
+JWT_SECRET=your_jwt_secret
+WEBHOOK_VERIFY_TOKEN=your_webhook_token
+```
 
-## Multi-Tenancy (Coming)
+## Project Structure
 
-- Shared database with `tenant_id` isolation
-- Per-tenant WhatsApp credentials
-- Subdomain routing (firm.yourcrm.in)
-- Subscription billing via Razorpay
+```
+├── backend/
+│   ├── src/
+│   │   ├── app.js              # Express app + webhook handler
+│   │   ├── database.js         # MySQL + auto-migrations
+│   │   ├── routes/
+│   │   │   ├── contacts.js     # Contact CRUD + import
+│   │   │   ├── whatsapp.js     # Broadcast + templates
+│   │   │   ├── whatsapp-chat.js # Chat inbox API
+│   │   │   └── settings.js     # Tenant settings
+│   │   └── services/
+│   │       └── whatsapp.js     # Meta API wrapper
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx             # 4 views: Contacts, Broadcast, Chat, Settings
+│   │   ├── stores/store.js     # Zustand state + API calls
+│   │   └── components/         # UI components
+│   └── package.json
+└── knowledge-base/             # Full project documentation
+```
+
+## Documentation
+
+See the `knowledge-base/` folder for comprehensive documentation:
+- **PROJECT_OVERVIEW.md** — Business model, features, design decisions
+- **ARCHITECTURE.md** — Database schema, API endpoints, data flows
+- **DEPLOYMENT.md** — Step-by-step VPS deployment guide
+- **DEVELOPMENT_GUIDE.md** — Coding patterns and conventions
+
+## Deployment
+
+Hosted on Hostinger VPS at `broadcast.innodify.in`. See `knowledge-base/DEPLOYMENT.md` for full deployment instructions.
+
+## License
+
+Private — All rights reserved.
