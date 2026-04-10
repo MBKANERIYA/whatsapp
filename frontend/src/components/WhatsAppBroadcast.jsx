@@ -561,65 +561,212 @@ export default function WhatsAppBroadcast() {
                 </div>
 
                 {!tplShowList ? (
-                    <div className="card" style={{ padding: '24px' }}>
-                        <h3 style={{ marginBottom: '16px' }}>Create New Template</h3>
-                        <form onSubmit={handleCreateTemplate}>
-                            <div style={{ display: 'grid', grid: 'auto / 1fr 1fr 1fr', gap: '12px' }}>
-                                <div className="form-group">
-                                    <label className="form-label">Name *</label>
-                                    <input className="form-input" value={tplName} onInput={e => setTplName(e.target.value)} placeholder="e.g. welcome_offer" required />
-                                    <small style={{ opacity: 0.5 }}>Lowercase, underscores only</small>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
+                        {/* ── Form ── */}
+                        <div className="card" style={{ padding: '24px' }}>
+                            <h3 style={{ marginBottom: '16px' }}>Create New Template</h3>
+                            <form onSubmit={handleCreateTemplate}>
+                                <div style={{ display: 'grid', grid: 'auto / 1fr 1fr 1fr', gap: '12px' }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Name *</label>
+                                        <input className="form-input" value={tplName} onInput={e => setTplName(e.target.value)} placeholder="e.g. welcome_offer" required />
+                                        <small style={{ opacity: 0.5, fontSize: '11px' }}>Lowercase, underscores only</small>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Category</label>
+                                        <select className="form-input" value={tplCategory} onChange={e => setTplCategory(e.target.value)}>
+                                            <option value="MARKETING">Marketing</option>
+                                            <option value="UTILITY">Utility</option>
+                                            <option value="AUTHENTICATION">Authentication</option>
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Language</label>
+                                        <select className="form-input" value={tplLanguage} onChange={e => setTplLanguage(e.target.value)}>
+                                            <option value="en">English</option>
+                                            <option value="hi">Hindi</option>
+                                            <option value="en_US">English (US)</option>
+                                        </select>
+                                    </div>
                                 </div>
+
                                 <div className="form-group">
-                                    <label className="form-label">Category</label>
-                                    <select className="form-input" value={tplCategory} onChange={e => setTplCategory(e.target.value)}>
-                                        <option value="MARKETING">Marketing</option>
-                                        <option value="UTILITY">Utility</option>
-                                        <option value="AUTHENTICATION">Authentication</option>
-                                    </select>
+                                    <label className="form-label">Header Image (optional)</label>
+                                    <input type="file" accept="image/*" onChange={handleImageSelect} className="form-input" />
                                 </div>
+
                                 <div className="form-group">
-                                    <label className="form-label">Language</label>
-                                    <select className="form-input" value={tplLanguage} onChange={e => setTplLanguage(e.target.value)}>
-                                        <option value="en">English</option>
-                                        <option value="hi">Hindi</option>
-                                        <option value="en_US">English (US)</option>
-                                    </select>
+                                    <label className="form-label">Body Text * <span style={{ opacity: 0.5 }}>Use {'{{1}}'}, {'{{2}}'} for variables</span></label>
+                                    <textarea className="form-input" value={tplBody} onInput={e => setTplBody(e.target.value)} rows={4} required
+                                        placeholder="Hi {{1}}, thank you for your interest! We have a special offer for you." />
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Footer (optional)</label>
+                                    <input className="form-input" value={tplFooter} onInput={e => setTplFooter(e.target.value)} placeholder="Reply STOP to unsubscribe" maxLength={60} />
+                                </div>
+
+                                <div style={{ display: 'grid', grid: 'auto / 1fr 1fr', gap: '12px' }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Call Button Text</label>
+                                        <input className="form-input" value={tplCallText} onInput={e => setTplCallText(e.target.value)} placeholder="Call Us" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Call Button Phone</label>
+                                        <input className="form-input" value={tplCallPhone} onInput={e => setTplCallPhone(e.target.value)} placeholder="+919876543210" />
+                                    </div>
+                                </div>
+
+                                <button type="submit" className="btn btn--primary" disabled={tplCreating} style={{ marginTop: '8px' }}>
+                                    {tplCreating ? 'Submitting...' : 'Submit to Meta for Review'}
+                                </button>
+                            </form>
+                        </div>
+
+                        {/* ── Live Preview (WhatsApp Phone Mockup) ── */}
+                        <div style={{ position: 'sticky', top: '32px' }}>
+                            <div style={{
+                                fontSize: '11px', fontWeight: 600, textTransform: 'uppercase',
+                                letterSpacing: '0.06em', color: 'var(--text-muted)',
+                                marginBottom: '8px', paddingLeft: '4px',
+                            }}>Live Preview</div>
+
+                            {/* Phone Frame */}
+                            <div style={{
+                                background: '#0B141A', borderRadius: '24px',
+                                padding: '12px 8px', boxShadow: 'var(--shadow-lg)',
+                                overflow: 'hidden',
+                            }}>
+                                {/* Status Bar */}
+                                <div style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    padding: '4px 12px 8px', fontSize: '11px', color: '#aaa',
+                                }}>
+                                    <span>9:41</span>
+                                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2"><path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.56 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#aaa"><rect x="1" y="6" width="3" height="12" rx="1"/><rect x="7" y="4" width="3" height="14" rx="1"/><rect x="13" y="2" width="3" height="16" rx="1"/><rect x="19" y="0" width="3" height="18" rx="1"/></svg>
+                                    </div>
+                                </div>
+
+                                {/* WhatsApp Header */}
+                                <div style={{
+                                    background: '#1F2C34', padding: '10px 14px',
+                                    display: 'flex', alignItems: 'center', gap: '10px',
+                                    borderRadius: '0',
+                                }}>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+                                    <div style={{
+                                        width: '32px', height: '32px', borderRadius: '50%',
+                                        background: '#25D366', display: 'flex', alignItems: 'center',
+                                        justifyContent: 'center', fontSize: '14px', fontWeight: 700, color: '#fff',
+                                    }}>B</div>
+                                    <div>
+                                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#e9edef' }}>Business</div>
+                                        <div style={{ fontSize: '10px', color: '#8696a0' }}>online</div>
+                                    </div>
+                                </div>
+
+                                {/* Chat Area */}
+                                <div style={{
+                                    background: '#0B141A',
+                                    backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'200\' height=\'200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'p\' width=\'40\' height=\'40\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M0 20h40M20 0v40\' stroke=\'%23ffffff06\' fill=\'none\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect fill=\'url(%23p)\' width=\'200\' height=\'200\'/%3E%3C/svg%3E")',
+                                    minHeight: '320px', padding: '16px 10px',
+                                    display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                                }}>
+                                    {/* Message Bubble */}
+                                    <div style={{
+                                        background: '#1F2C34', borderRadius: '0 8px 8px 8px',
+                                        padding: '0', maxWidth: '280px', overflow: 'hidden',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                                    }}>
+                                        {/* Header Image */}
+                                        {tplImagePreview && (
+                                            <img src={tplImagePreview} style={{
+                                                width: '100%', height: '140px',
+                                                objectFit: 'cover', display: 'block',
+                                            }} />
+                                        )}
+
+                                        {/* Body */}
+                                        <div style={{ padding: '8px 10px 4px' }}>
+                                            <div style={{
+                                                fontSize: '13px', color: '#e9edef',
+                                                lineHeight: '1.45', whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-word',
+                                            }}>
+                                                {tplBody
+                                                    ? tplBody.replace(/\{\{(\d+)\}\}/g, (_, n) => `[Variable ${n}]`)
+                                                    : <span style={{ color: '#8696a0', fontStyle: 'italic' }}>Your message body will appear here...</span>
+                                                }
+                                            </div>
+
+                                            {/* Footer */}
+                                            {tplFooter && (
+                                                <div style={{
+                                                    fontSize: '11px', color: '#8696a0',
+                                                    marginTop: '4px',
+                                                }}>{tplFooter}</div>
+                                            )}
+
+                                            {/* Timestamp */}
+                                            <div style={{
+                                                fontSize: '10px', color: '#8696a0',
+                                                textAlign: 'right', marginTop: '2px',
+                                                display: 'flex', justifyContent: 'flex-end',
+                                                alignItems: 'center', gap: '3px',
+                                            }}>
+                                                9:41 AM
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#53bdeb" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12l5 5L18 6"/></svg>
+                                            </div>
+                                        </div>
+
+                                        {/* Call Button */}
+                                        {tplCallText && (
+                                            <div style={{
+                                                borderTop: '1px solid rgba(255,255,255,0.06)',
+                                                padding: '10px',
+                                                textAlign: 'center',
+                                                display: 'flex', alignItems: 'center',
+                                                justifyContent: 'center', gap: '6px',
+                                            }}>
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#53bdeb" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                                <span style={{ fontSize: '13px', color: '#53bdeb', fontWeight: 500 }}>{tplCallText}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Template Name Badge */}
+                                    {tplName && (
+                                        <div style={{
+                                            marginTop: '8px', fontSize: '10px',
+                                            color: '#8696a0', textAlign: 'center',
+                                        }}>
+                                            Template: <span style={{ color: '#53bdeb' }}>{tplName}</span>
+                                            {' · '}{tplCategory.toLowerCase()} · {tplLanguage}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Input Bar */}
+                                <div style={{
+                                    background: '#1F2C34', padding: '8px 10px',
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                }}>
+                                    <div style={{
+                                        flex: 1, background: '#2A3942', borderRadius: '20px',
+                                        padding: '8px 14px', fontSize: '12px', color: '#8696a0',
+                                    }}>Type a message</div>
+                                    <div style={{
+                                        width: '34px', height: '34px', borderRadius: '50%',
+                                        background: '#25D366', display: 'flex',
+                                        alignItems: 'center', justifyContent: 'center',
+                                    }}>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                                    </div>
                                 </div>
                             </div>
-
-                            <div className="form-group">
-                                <label className="form-label">Header Image (optional)</label>
-                                <input type="file" accept="image/*" onChange={handleImageSelect} className="form-input" />
-                                {tplImagePreview && <img src={tplImagePreview} style={{ height: '80px', marginTop: '8px', borderRadius: '8px' }} />}
-                            </div>
-
-                            <div className="form-group">
-                                <label className="form-label">Body Text * <span style={{ opacity: 0.5 }}>Use {'{{1}}'}, {'{{2}}'} for variables</span></label>
-                                <textarea className="form-input" value={tplBody} onInput={e => setTplBody(e.target.value)} rows={4} required
-                                    placeholder="Hi {{1}}, thank you for your interest! We have a special offer for you." />
-                            </div>
-
-                            <div className="form-group">
-                                <label className="form-label">Footer (optional)</label>
-                                <input className="form-input" value={tplFooter} onInput={e => setTplFooter(e.target.value)} placeholder="Reply STOP to unsubscribe" maxLength={60} />
-                            </div>
-
-                            <div style={{ display: 'grid', grid: 'auto / 1fr 1fr', gap: '12px' }}>
-                                <div className="form-group">
-                                    <label className="form-label">Call Button Text</label>
-                                    <input className="form-input" value={tplCallText} onInput={e => setTplCallText(e.target.value)} placeholder="Call Us" />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Call Button Phone</label>
-                                    <input className="form-input" value={tplCallPhone} onInput={e => setTplCallPhone(e.target.value)} placeholder="+919876543210" />
-                                </div>
-                            </div>
-
-                            <button type="submit" className="btn btn--primary" disabled={tplCreating} style={{ marginTop: '8px' }}>
-                                {tplCreating ? 'Submitting...' : 'Submit to Meta for Review'}
-                            </button>
-                        </form>
+                        </div>
                     </div>
                 ) : (
                     <div className="card" style={{ overflow: 'auto' }}>
