@@ -127,10 +127,15 @@ export const useStore = create(
             register: async (name, firmName, email, password) => {
                 try {
                     set({ isLoading: true, error: null });
-                    const data = await api('/auth/signup', {
+                    // Use raw fetch — signup is a PUBLIC endpoint, no tenant context needed
+                    const res = await fetch(`${API_BASE_URL}/api/v1/public/signup`, {
                         method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ name, firmName, email, password }),
                     });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Signup failed');
+
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
                     if (data.tenant) localStorage.setItem('tenant_slug', data.tenant.slug);

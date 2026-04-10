@@ -16,6 +16,7 @@ import whatsappChatRoutes from './routes/whatsapp-chat.js';
 import contactsRoutes from './routes/contacts.js';
 import tenantSettingsRoutes from './routes/tenant-settings.js';
 import leadsRoutes from './routes/leads.js';
+import publicRoutes from './routes/public.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -244,18 +245,22 @@ async function processIncomingMessage(msg, contacts, phoneNumberId) {
     console.log(`[Chat] Incoming from ${fromPhone}: "${previewText}" (tenant: ${tenantId})`);
 }
 
-// Public lead capture (no tenant/auth needed)
+// ============================================================
+// PUBLIC ROUTES — No tenant resolution, no auth required
+// Future public endpoints: add to routes/public.js
+// ============================================================
 app.use('/api/v1/leads', leadsRoutes);
+app.use('/api/v1/public', publicRoutes);
 
 // ============================================================
-// TENANT-SCOPED API ROUTES
+// TENANT-SCOPED ROUTES — Tenant resolution required
 // ============================================================
 app.use('/api/v1', resolveTenant);
 
 // Auth (tenant resolved, auth not required for login)
 app.use('/api/v1/auth', authRoutes);
 
-// Protected routes
+// Protected routes (tenant + auth required)
 app.use('/api/v1/contacts', auth, contactsRoutes);
 app.use('/api/v1/whatsapp', auth, whatsappRoutes);
 app.use('/api/v1/whatsapp/chat', auth, whatsappChatRoutes);
