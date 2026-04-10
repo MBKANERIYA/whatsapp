@@ -309,7 +309,7 @@ export async function uploadMediaForTemplate(imageBuffer, mimeType = 'image/jpeg
 /**
  * Create a new WhatsApp template
  */
-export async function createTemplate({ name, category, language, bodyText, headerImageHandle, footerText, callButtonText, callButtonPhone }, tenant) {
+export async function createTemplate({ name, category, language, bodyText, headerImageHandle, footerText, buttons = [] }, tenant) {
     const { token, wabaId } = getCredentials(tenant);
     if (!wabaId) throw new Error('WhatsApp Business Account ID not configured.');
 
@@ -328,15 +328,38 @@ export async function createTemplate({ name, category, language, bodyText, heade
 
     if (footerText?.trim()) components.push({ type: 'FOOTER', text: footerText.trim() });
 
-    if (callButtonPhone && callButtonText) {
-        components.push({
-            type: 'BUTTONS',
-            buttons: [{
-                type: 'PHONE_NUMBER',
-                text: callButtonText.substring(0, 25),
-                phone_number: callButtonPhone.startsWith('+') ? callButtonPhone : `+${callButtonPhone}`
-            }]
-        });
+    // Build buttons component (supports PHONE_NUMBER, URL, QUICK_REPLY)
+    const validButtons = (buttons || []).filter(b => b && b.type);
+    if (validButtons.length > 0) {
+        const metaButtons = validButtons.map(btn => {
+            if (btn.type === 'PHONE_NUMBER' && btn.text && btn.phone) {
+                return {
+                    type: 'PHONE_NUMBER',
+                    text: btn.text.substring(0, 25),
+                    phone_number: btn.phone.startsWith('+') ? btn.phone : `+${btn.phone}`,
+                };
+            }
+            if (btn.type === 'URL' && btn.text && btn.url) {
+                const urlBtn = {
+                    type: 'URL',
+                    text: btn.text.substring(0, 25),
+                    url: btn.url,
+                };
+                // If URL contains {{1}}, it's a dynamic URL — add example
+                if (btn.url.includes('{{1}}')) {
+                    urlBtn.example = [btn.urlExample || 'https://example.com'];
+                }
+                return urlBtn;
+            }
+            if (btn.type === 'QUICK_REPLY' && btn.text) {
+                return { type: 'QUICK_REPLY', text: btn.text.substring(0, 25) };
+            }
+            return null;
+        }).filter(Boolean);
+
+        if (metaButtons.length > 0) {
+            components.push({ type: 'BUTTONS', buttons: metaButtons });
+        }
     }
 
     const payload = {

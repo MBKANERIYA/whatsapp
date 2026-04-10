@@ -277,26 +277,25 @@ router.post('/templates/upload-image', upload.single('image'), async (req, res) 
  */
 router.post('/templates', async (req, res) => {
     try {
-        const { name, category, language, bodyText, headerImageHandle, footerText, callButtonText, callButtonPhone } = req.body;
+        const { name, category, language, bodyText, headerImageHandle, footerText, buttons } = req.body;
         if (!name) return res.status(400).json({ error: 'Template name is required' });
         if (!bodyText) return res.status(400).json({ error: 'Body text is required' });
 
         const result = await createTemplate({
             name, category: category || 'MARKETING', language: language || 'en',
             bodyText, headerImageHandle: headerImageHandle || null,
-            footerText: footerText || null, callButtonText: callButtonText || null,
-            callButtonPhone: callButtonPhone || null,
+            footerText: footerText || null, buttons: buttons || [],
         }, req.tenant);
 
         try {
             await run(`
-                INSERT INTO whatsapp_templates (tenant_id, meta_template_id, name, category, language, body_text, has_header_image, footer_text, call_button_text, call_button_phone, status, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO whatsapp_templates (tenant_id, meta_template_id, name, category, language, body_text, has_header_image, footer_text, buttons_json, status, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [
                 req.tenantId, result.id, name.toLowerCase().replace(/[^a-z0-9_]/g, '_'),
                 category || 'MARKETING', language || 'en', bodyText,
                 headerImageHandle ? 1 : 0, footerText || null,
-                callButtonText || null, callButtonPhone || null,
+                JSON.stringify(buttons || []),
                 result.status || 'PENDING', req.user.userId,
             ]);
         } catch (dbErr) {

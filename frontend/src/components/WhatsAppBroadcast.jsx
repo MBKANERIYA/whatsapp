@@ -19,12 +19,24 @@ export default function WhatsAppBroadcast() {
     const [tplLanguage, setTplLanguage] = useState('en');
     const [tplBody, setTplBody] = useState('');
     const [tplFooter, setTplFooter] = useState('');
-    const [tplCallText, setTplCallText] = useState('');
-    const [tplCallPhone, setTplCallPhone] = useState('');
+    const [tplButtons, setTplButtons] = useState([]); // { type, text, phone?, url?, urlExample? }
     const [tplImageFile, setTplImageFile] = useState(null);
     const [tplImagePreview, setTplImagePreview] = useState(null);
     const [tplCreating, setTplCreating] = useState(false);
     const [tplShowList, setTplShowList] = useState(false);
+
+    const addButton = (type) => {
+        if (tplButtons.length >= 10) return;
+        if (type === 'PHONE_NUMBER' && tplButtons.filter(b => b.type === 'PHONE_NUMBER').length >= 1) return;
+        if (type === 'URL' && tplButtons.filter(b => b.type === 'URL').length >= 2) return;
+        setTplButtons(prev => [...prev, { type, text: '', phone: '', url: '', urlExample: '' }]);
+    };
+    const updateButton = (idx, field, value) => {
+        setTplButtons(prev => prev.map((b, i) => i === idx ? { ...b, [field]: value } : b));
+    };
+    const removeButton = (idx) => {
+        setTplButtons(prev => prev.filter((_, i) => i !== idx));
+    };
 
     // Broadcast state
     const [recipientType, setRecipientType] = useState('all');
@@ -160,6 +172,13 @@ export default function WhatsAppBroadcast() {
             if (tplImageFile) {
                 headerImageHandle = await uploadTemplateImage(tplImageFile);
             }
+            // Build buttons array for backend
+            const buttons = tplButtons.filter(b => b.text?.trim()).map(b => ({
+                type: b.type,
+                text: b.text.trim(),
+                ...(b.type === 'PHONE_NUMBER' && { phone: b.phone }),
+                ...(b.type === 'URL' && { url: b.url, urlExample: b.urlExample }),
+            }));
             await createWhatsAppTemplate({
                 name: tplName.trim(),
                 category: tplCategory,
@@ -167,11 +186,10 @@ export default function WhatsAppBroadcast() {
                 bodyText: tplBody,
                 headerImageHandle,
                 footerText: tplFooter || null,
-                callButtonText: tplCallText || null,
-                callButtonPhone: tplCallPhone || null,
+                buttons,
             });
             showToast('Template submitted for review by Meta');
-            setTplName(''); setTplBody(''); setTplFooter(''); setTplCallText(''); setTplCallPhone('');
+            setTplName(''); setTplBody(''); setTplFooter(''); setTplButtons([]);
             setTplImageFile(null); setTplImagePreview(null);
             fetchWhatsAppTemplates();
         } catch (err) {
@@ -606,14 +624,65 @@ export default function WhatsAppBroadcast() {
                                     <input className="form-input" value={tplFooter} onInput={e => setTplFooter(e.target.value)} placeholder="Reply STOP to unsubscribe" maxLength={60} />
                                 </div>
 
-                                <div style={{ display: 'grid', grid: 'auto / 1fr 1fr', gap: '12px' }}>
-                                    <div className="form-group">
-                                        <label className="form-label">Call Button Text</label>
-                                        <input className="form-input" value={tplCallText} onInput={e => setTplCallText(e.target.value)} placeholder="Call Us" />
-                                    </div>
-                                    <div className="form-group">
-                                        <label className="form-label">Call Button Phone</label>
-                                        <input className="form-input" value={tplCallPhone} onInput={e => setTplCallPhone(e.target.value)} placeholder="+919876543210" />
+                                {/* ── Action Buttons Builder ── */}
+                                <div className="form-group">
+                                    <label className="form-label">Buttons <span style={{ opacity: 0.5, fontSize: '11px' }}>(optional · max 10)</span></label>
+                                    
+                                    {tplButtons.map((btn, idx) => (
+                                        <div key={idx} style={{
+                                            display: 'flex', gap: '8px', alignItems: 'flex-start',
+                                            padding: '10px', background: 'var(--bg-tertiary)',
+                                            borderRadius: '8px', marginBottom: '8px',
+                                        }}>
+                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                                                    {btn.type === 'PHONE_NUMBER' ? '📞 Call Button' : btn.type === 'URL' ? '🔗 URL Button' : '↩ Quick Reply'}
+                                                </div>
+                                                <input className="form-input" value={btn.text}
+                                                    onInput={e => updateButton(idx, 'text', e.target.value)}
+                                                    placeholder="Button text (max 25 chars)" maxLength={25}
+                                                    style={{ fontSize: '13px' }} />
+                                                {btn.type === 'PHONE_NUMBER' && (
+                                                    <input className="form-input" value={btn.phone}
+                                                        onInput={e => updateButton(idx, 'phone', e.target.value)}
+                                                        placeholder="+919876543210" style={{ fontSize: '13px' }} />
+                                                )}
+                                                {btn.type === 'URL' && (
+                                                    <>
+                                                        <input className="form-input" value={btn.url}
+                                                            onInput={e => updateButton(idx, 'url', e.target.value)}
+                                                            placeholder="https://example.com/page/{{1}}" style={{ fontSize: '13px' }} />
+                                                        {btn.url?.includes('{{') && (
+                                                            <input className="form-input" value={btn.urlExample}
+                                                                onInput={e => updateButton(idx, 'urlExample', e.target.value)}
+                                                                placeholder="Example URL (for Meta review)" style={{ fontSize: '12px' }} />
+                                                        )}
+                                                    </>
+                                                )}
+                                            </div>
+                                            <button type="button" className="btn-icon" onClick={() => removeButton(idx)}
+                                                style={{ color: '#ef4444', marginTop: '18px' }} title="Remove">
+                                                <Icon name="close" size={16} />
+                                            </button>
+                                        </div>
+                                    ))}
+
+                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                        <button type="button" className="btn btn--outline" style={{ fontSize: '12px', padding: '4px 10px' }}
+                                            onClick={() => addButton('PHONE_NUMBER')}
+                                            disabled={tplButtons.filter(b => b.type === 'PHONE_NUMBER').length >= 1}>
+                                            + Call
+                                        </button>
+                                        <button type="button" className="btn btn--outline" style={{ fontSize: '12px', padding: '4px 10px' }}
+                                            onClick={() => addButton('URL')}
+                                            disabled={tplButtons.filter(b => b.type === 'URL').length >= 2}>
+                                            + Website
+                                        </button>
+                                        <button type="button" className="btn btn--outline" style={{ fontSize: '12px', padding: '4px 10px' }}
+                                            onClick={() => addButton('QUICK_REPLY')}
+                                            disabled={tplButtons.length >= 10}>
+                                            + Quick Reply
+                                        </button>
                                     </div>
                                 </div>
 
@@ -721,19 +790,27 @@ export default function WhatsAppBroadcast() {
                                             </div>
                                         </div>
 
-                                        {/* Call Button */}
-                                        {tplCallText && (
-                                            <div style={{
+                                        {/* Action Buttons */}
+                                        {tplButtons.filter(b => b.text?.trim()).map((btn, idx) => (
+                                            <div key={idx} style={{
                                                 borderTop: '1px solid rgba(255,255,255,0.06)',
                                                 padding: '10px',
                                                 textAlign: 'center',
                                                 display: 'flex', alignItems: 'center',
                                                 justifyContent: 'center', gap: '6px',
                                             }}>
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#53bdeb" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                                                <span style={{ fontSize: '13px', color: '#53bdeb', fontWeight: 500 }}>{tplCallText}</span>
+                                                {btn.type === 'PHONE_NUMBER' && (
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#53bdeb" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                                )}
+                                                {btn.type === 'URL' && (
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#53bdeb" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+                                                )}
+                                                {btn.type === 'QUICK_REPLY' && (
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#53bdeb" strokeWidth="2"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></svg>
+                                                )}
+                                                <span style={{ fontSize: '13px', color: '#53bdeb', fontWeight: 500 }}>{btn.text}</span>
                                             </div>
-                                        )}
+                                        ))}
                                     </div>
 
                                     {/* Template Name Badge */}
