@@ -41,8 +41,10 @@ router.get('/', async (req, res) => {
             params.push(parseFloat(max_ticket));
         }
 
-        sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-        params.push(parseInt(limit), offset);
+        const limitNum = parseInt(limit) || 50;
+        const offsetNum = parseInt(offset) || 0;
+
+        sql += ` ORDER BY created_at DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
         const contacts = await query(sql, params);
 
