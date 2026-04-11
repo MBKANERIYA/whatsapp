@@ -18,10 +18,10 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ error: 'Email and password required' });
         }
 
-        // Look up user scoped to current tenant
+        // Look up user across all tenants (single-domain SaaS)
         const user = await get(
-            'SELECT * FROM users WHERE email = ? AND tenant_id = ?',
-            [email, req.tenantId]
+            'SELECT u.*, t.name AS tenant_name, t.slug AS tenant_slug, t.logo_url, t.primary_color, t.subscription_plan, t.subscription_status, t.trial_ends_at FROM users u JOIN tenants t ON u.tenant_id = t.id WHERE u.email = ?',
+            [email]
         );
 
         if (!user) {
@@ -33,8 +33,13 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // Generate token with tenantId
-        const token = generateToken(user.id, user.email, user.role, req.tenantId);
+        // Check subscription status
+        if (user.subscription_status === 'cancelled') {
+            return res.status(403).json({ error: 'This account has been deactivated.' });
+        }
+
+        // Generate token with user's actual tenantId
+        const token = generateToken(user.id, user.email, user.role, user.tenant_id);
 
         res.json({
             token,
@@ -45,12 +50,12 @@ router.post('/login', async (req, res) => {
                 role: user.role,
             },
             tenant: {
-                id: req.tenant.id,
-                name: req.tenant.name,
-                slug: req.tenant.slug,
-                logo_url: req.tenant.logo_url,
-                primary_color: req.tenant.primary_color,
-                subscription_plan: req.tenant.subscription_plan,
+                id: user.tenant_id,
+                name: user.tenant_name,
+                slug: user.tenant_slug,
+                logo_url: user.logo_url,
+                primary_color: user.primary_color,
+                subscription_plan: user.subscription_plan,
             },
         });
     } catch (error) {
