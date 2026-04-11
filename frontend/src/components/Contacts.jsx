@@ -10,6 +10,8 @@ export default function Contacts() {
     const [showImport, setShowImport] = useState(false);
     const [formData, setFormData] = useState({ name: '', phone: '', email: '', location: '', ticket_size: '', tags: '', notes: '', source: '' });
     const [importText, setImportText] = useState('');
+    const [importFile, setImportFile] = useState(null);
+    const [importPreview, setImportPreview] = useState(null);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => { fetchContacts(); }, []);
@@ -65,26 +67,43 @@ export default function Contacts() {
         }
     };
 
+    const parseCSV = (text) => {
+        const lines = text.trim().split('\n').filter(Boolean);
+        if (lines.length === 0) return [];
+        const startIdx = lines[0].toLowerCase().includes('name') && lines[0].toLowerCase().includes('phone') ? 1 : 0;
+        return lines.slice(startIdx).map(line => {
+            const parts = line.split(',').map(p => p.trim());
+            return {
+                name: parts[0] || '',
+                phone: parts[1] || '',
+                email: parts[2] || '',
+                location: parts[3] || '',
+                ticket_size: parts[4] ? parseFloat(parts[4]) : null,
+                tags: parts[5] ? parts[5].split(';').map(t => t.trim()).filter(Boolean) : [],
+            };
+        }).filter(c => c.name && c.phone);
+    };
+
+    const handleFileSelect = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setImportFile(file);
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const text = ev.target.result;
+            setImportText(text);
+            setImportPreview(parseCSV(text));
+        };
+        reader.readAsText(file);
+    };
+
     const handleImport = async () => {
+        if (!importPreview || importPreview.length === 0) { showToast('No valid contacts found', 'error'); return; }
         setLoading(true);
         try {
-            const lines = importText.trim().split('\n').filter(Boolean);
-            const contactsList = lines.map(line => {
-                const parts = line.split(',').map(p => p.trim());
-                return {
-                    name: parts[0] || '',
-                    phone: parts[1] || '',
-                    email: parts[2] || '',
-                    location: parts[3] || '',
-                    ticket_size: parts[4] ? parseFloat(parts[4]) : null,
-                    tags: parts[5] ? parts[5].split(';') : [],
-                };
-            }).filter(c => c.name && c.phone);
-
-            const result = await importContacts(contactsList);
+            const result = await importContacts(importPreview);
             showToast(`Imported ${result.imported} contacts (${result.skipped} skipped)`);
-            setShowImport(false);
-            setImportText('');
+            setShowImport(false); setImportText(''); setImportFile(null); setImportPreview(null);
         } catch (err) {
             showToast(err.message, 'error');
         }
@@ -216,21 +235,81 @@ export default function Contacts() {
             {/* Import Modal */}
             {showImport && (
                 <div className="modal-backdrop" onClick={() => setShowImport(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '650px' }}>
+                    <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
                         <div className="modal-header">
                             <h2>Import Contacts</h2>
                             <button className="btn-icon" onClick={() => setShowImport(false)}><Icon name="close" size={20} /></button>
                         </div>
-                        <p style={{ fontSize: '13px', opacity: 0.7, marginBottom: '12px' }}>
-                            Paste contacts, one per line: <code>Name, Phone, Email, Location, TicketSize, Tags(semicolon-sep)</code>
-                        </p>
-                        <textarea className="form-input" value={importText} onInput={e => setImportText(e.target.value)} rows={10}
-                            placeholder={`John Doe, 9876543210, john@email.com, Delhi, 5000000, vip;interested\nJane Smith, 8765432109, , Mumbai, 10000000, premium`}
-                            style={{ fontFamily: 'monospace', fontSize: '12px' }} />
+
+                        {/* Upload Area */}
+                        <div style={{
+                            border: '2px dashed var(--border-color)',
+                            borderRadius: '12px', padding: '32px 20px',
+                            textAlign: 'center', cursor: 'pointer',
+                            background: importFile ? 'rgba(37, 211, 102, 0.04)' : 'var(--bg-tertiary)',
+                            transition: 'all 0.2s',
+                        }}
+                            onClick={() => document.getElementById('csv-file-input').click()}
+                        >
+                            <input id="csv-file-input" type="file" accept=".csv,text/csv" onChange={handleFileSelect}
+                                style={{ display: 'none' }} />
+
+                            {!importFile ? (
+                                <>
+                                    <Icon name="upload" size={32} />
+                                    <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: 600 }}>Click to upload CSV file</div>
+                                    <div style={{ marginTop: '4px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                        Format: name, phone, email, location, ticket_size, tags
+                                    </div>
+                                    <button type="button" className="btn btn--outline" onClick={(e) => { e.stopPropagation(); downloadTemplate(); }}
+                                        style={{ marginTop: '12px', fontSize: '12px', padding: '4px 12px' }}>
+                                        <Icon name="download" size={14} /> Download Template
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--accent-primary)' }}>
+                                        ✓ {importFile.name}
+                                    </div>
+                                    <div style={{ marginTop: '4px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                        {importPreview ? `${importPreview.length} valid contacts found` : 'Parsing...'}
+                                    </div>
+                                    <button type="button" className="btn btn--outline" style={{ marginTop: '8px', fontSize: '12px', padding: '4px 12px' }}
+                                        onClick={(e) => { e.stopPropagation(); setImportFile(null); setImportPreview(null); setImportText(''); }}>
+                                        Change file
+                                    </button>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Preview Table */}
+                        {importPreview && importPreview.length > 0 && (
+                            <div style={{ marginTop: '16px', maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                                <table className="table" style={{ fontSize: '12px' }}>
+                                    <thead>
+                                        <tr><th>Name</th><th>Phone</th><th>Email</th><th>Location</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {importPreview.slice(0, 5).map((c, i) => (
+                                            <tr key={i}>
+                                                <td>{c.name}</td>
+                                                <td style={{ fontFamily: 'monospace' }}>{c.phone}</td>
+                                                <td>{c.email || '—'}</td>
+                                                <td>{c.location || '—'}</td>
+                                            </tr>
+                                        ))}
+                                        {importPreview.length > 5 && (
+                                            <tr><td colSpan={4} style={{ textAlign: 'center', opacity: 0.5 }}>...and {importPreview.length - 5} more</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' }}>
-                            <button className="btn btn--outline" onClick={() => setShowImport(false)}>Cancel</button>
-                            <button className="btn btn--primary" onClick={handleImport} disabled={loading || !importText.trim()}>
-                                {loading ? 'Importing...' : 'Import'}
+                            <button className="btn btn--outline" onClick={() => { setShowImport(false); setImportFile(null); setImportPreview(null); }}>Cancel</button>
+                            <button className="btn btn--primary" onClick={handleImport} disabled={loading || !importPreview?.length}>
+                                {loading ? 'Importing...' : `Import ${importPreview?.length || 0} Contacts`}
                             </button>
                         </div>
                     </div>
