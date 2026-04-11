@@ -13,6 +13,8 @@ router.get('/', async (req, res) => {
         let sql = 'SELECT * FROM contacts WHERE tenant_id = ?';
         const params = [req.tenantId];
 
+        console.log(`[CONTACTS GET] tenant_id=${req.tenantId}, search=${search || ''}, page=${page}`);
+
         if (search) {
             sql += ' AND (name LIKE ? OR phone LIKE ? OR email LIKE ? OR location LIKE ?)';
             const s = `%${search}%`;
@@ -146,21 +148,29 @@ router.post('/import', async (req, res) => {
             return res.status(400).json({ error: 'Provide a non-empty contacts array' });
         }
 
+        console.log(`[IMPORT] tenant_id=${req.tenantId}, contacts=${contactList.length}`);
+
         let imported = 0;
         let skipped = 0;
 
         for (const c of contactList) {
             if (!c.name || !c.phone) { skipped++; continue; }
             try {
-                await run(
+                const result = await run(
                     'INSERT INTO contacts (tenant_id, name, phone, email, location, ticket_size, tags, notes, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     [req.tenantId, c.name, c.phone, c.email || null, c.location || null, c.ticket_size || null, c.tags ? JSON.stringify(c.tags) : null, c.notes || null, c.source || null]
                 );
+                console.log(`[IMPORT] Inserted ${c.name}: id=${result.lastInsertRowid}, rows=${result.changes}`);
                 imported++;
             } catch (err) {
+                console.error(`[IMPORT] Failed ${c.name}:`, err.message);
                 skipped++;
             }
         }
+
+        // Verify: query back
+        const verify = await query('SELECT COUNT(*) as cnt FROM contacts WHERE tenant_id = ?', [req.tenantId]);
+        console.log(`[IMPORT] Verify: ${verify[0]?.cnt} contacts in tenant ${req.tenantId}`);
 
         res.json({ imported, skipped, total: contactList.length });
     } catch (error) {
