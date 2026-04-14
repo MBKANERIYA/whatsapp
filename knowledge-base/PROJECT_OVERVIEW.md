@@ -65,8 +65,11 @@ A **multi-tenant SaaS platform** that lets businesses send WhatsApp broadcast me
 
 ## Multi-Tenant Architecture
 
-- Tenant resolution: `x-tenant-slug` header (sent by frontend on every API request)
-- Backend middleware extracts slug → looks up tenant → injects `req.tenantId` and `req.tenant`
+- **Single domain**: `broadcast.innodify.in` (no per-tenant subdomains)
+- **Tenant resolution is soft**: if slug not found, continues with null (doesn't block)
+- **JWT is the source of truth**: auth middleware sets `req.tenantId` from token when tenant middleware can't resolve
+- **Login is cross-tenant**: searches by email across all tenants (not scoped to a slug)
+- Frontend stores `tenant_slug` in localStorage after login/signup, sends via `x-tenant-slug` header
 - All database queries filter by `tenant_id`
 - WhatsApp credentials stored per-tenant in `tenant_settings` table
 - Webhook identifies tenant by matching `phone_number_id` from incoming messages
