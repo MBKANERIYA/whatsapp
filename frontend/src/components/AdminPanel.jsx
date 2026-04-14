@@ -8,9 +8,7 @@ import Icon from './Icons';
 
 const PLAN_OPTIONS = [
     { value: 'trial', label: 'Trial', color: '#8B5CF6' },
-    { value: 'basic', label: 'Basic', color: '#3B82F6' },
-    { value: 'pro', label: 'Pro', color: '#10B981' },
-    { value: 'enterprise', label: 'Enterprise', color: '#F59E0B' },
+    { value: 'paid', label: 'Paid', color: '#10B981' },
 ];
 
 const STATUS_OPTIONS = [
