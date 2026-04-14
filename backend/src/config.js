@@ -1,6 +1,7 @@
 // Config for WhatsApp Broadcast SaaS Platform
 import dotenv from 'dotenv';
 import path from 'path';
+import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -49,5 +50,18 @@ export default {
     appDomain: process.env.APP_DOMAIN || 'localhost',
 
     // Super Admin emails (platform owners)
-    superAdminEmails: process.env.SUPER_ADMIN_EMAILS?.split(',') || [],
+    superAdminEmails: (() => {
+        const envVal = process.env.SUPER_ADMIN_EMAILS;
+        if (envVal) return envVal.split(',').map(e => e.trim());
+        // Fallback: read directly from .env.production
+        try {
+            const envContent = readFileSync(path.join(__dirname, '..', '.env.production'), 'utf-8');
+            const match = envContent.match(/^SUPER_ADMIN_EMAILS=(.+)$/m);
+            if (match) {
+                console.log('[CONFIG] Loaded SUPER_ADMIN_EMAILS from file fallback');
+                return match[1].split(',').map(e => e.trim());
+            }
+        } catch {}
+        return [];
+    })(),
 };
