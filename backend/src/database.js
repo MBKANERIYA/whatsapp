@@ -53,7 +53,7 @@ const migrate = async () => {
       phone VARCHAR(50),
       logo_url VARCHAR(500),
       primary_color VARCHAR(7) DEFAULT '#6366f1',
-      subscription_plan ENUM('trial','basic','pro','enterprise') DEFAULT 'trial',
+      subscription_plan ENUM('trial','basic','pro','enterprise','paid') DEFAULT 'trial',
       subscription_status ENUM('active','trial','expired','cancelled') DEFAULT 'trial',
       trial_ends_at DATETIME,
       whatsapp_access_token TEXT,
@@ -243,13 +243,18 @@ const migrate = async () => {
   }
 
   // --------------------------------------------------------
+  // Post-migration schema updates (safe to re-run)
+  // --------------------------------------------------------
+  try {
+    await pool.execute(`ALTER TABLE tenants MODIFY COLUMN subscription_plan ENUM('trial','basic','pro','enterprise','paid') DEFAULT 'trial'`);
+  } catch (error) { /* already updated */ }
+
+  // --------------------------------------------------------
   // Seed subscription plans
   // --------------------------------------------------------
   const plans = [
-    ['trial', 'Free Trial', 0, 2, false],
-    ['basic', 'Basic', 99900, 5, true],
-    ['pro', 'Pro', 249900, 15, true],
-    ['enterprise', 'Enterprise', 499900, 50, true],
+    ['trial', 'Free Trial', 0, 5, false],
+    ['paid', 'Paid', 99900, 50, true],
   ];
 
   for (const [name, displayName, priceMonthly, maxUsers, whatsappEnabled] of plans) {
