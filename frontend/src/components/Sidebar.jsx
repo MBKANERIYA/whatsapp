@@ -58,6 +58,21 @@ export default function Sidebar({ isOpen, onClose }) {
                         )}
                     </button>
                 ))}
+
+                {/* Admin Panel — visible only for admin users */}
+                {user?.role === 'admin' && (
+                    <>
+                        <div style={{ height: '1px', background: 'var(--border)', margin: '8px 12px' }} />
+                        <button
+                            className={`sidebar-nav-item ${currentView === 'admin' ? 'active' : ''}`}
+                            onClick={() => handleNav('admin')}
+                            style={{ color: currentView === 'admin' ? undefined : '#F59E0B' }}
+                        >
+                            <Icon name="lock" size={18} />
+                            <span>Admin Panel</span>
+                        </button>
+                    </>
+                )}
             </nav>
 
             {/* User */}

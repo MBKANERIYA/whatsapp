@@ -5,7 +5,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import config from './config.js';
 import { auth } from './middleware/auth.js';
-import { resolveTenant } from './middleware/tenant.js';
+import { resolveTenant, superAdminOnly } from './middleware/tenant.js';
 import { run, get, query } from './database.js';
 import { normalizePhone } from './services/whatsapp.js';
 
@@ -17,6 +17,7 @@ import contactsRoutes from './routes/contacts.js';
 import tenantSettingsRoutes from './routes/tenant-settings.js';
 import leadsRoutes from './routes/leads.js';
 import publicRoutes from './routes/public.js';
+import adminRoutes from './routes/admin.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -265,6 +266,9 @@ app.use('/api/v1/contacts', auth, contactsRoutes);
 app.use('/api/v1/whatsapp', auth, whatsappRoutes);
 app.use('/api/v1/whatsapp/chat', auth, whatsappChatRoutes);
 app.use('/api/v1/tenant-settings', auth, tenantSettingsRoutes);
+
+// Super admin routes (auth + super admin check)
+app.use('/api/v1/admin', auth, superAdminOnly, adminRoutes);
 
 // Serve static frontend
 const staticDir = join(__dirname, '..', 'public');
