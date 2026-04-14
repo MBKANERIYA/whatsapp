@@ -6,19 +6,20 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Load environment variables
-const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
-const envPath = path.join(__dirname, '..', envFile);
+// Load environment variables — always try .env.production first, then .env as fallback
+// dotenv won't override existing vars, so first-loaded wins
+const envProd = path.join(__dirname, '..', '.env.production');
+const envDefault = path.join(__dirname, '..', '.env');
 
-dotenv.config({ path: envPath });
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
+dotenv.config({ path: envProd });
+dotenv.config({ path: envDefault });
 
 if (!process.env.DB_USER) {
-    dotenv.config({ path: path.join(process.cwd(), envFile) });
+    dotenv.config({ path: path.join(process.cwd(), '.env.production') });
     dotenv.config({ path: path.join(process.cwd(), '.env') });
 }
 
-console.log(`[CONFIG] envPath=${envPath} NODE_ENV=${process.env.NODE_ENV} SUPER_ADMIN_EMAILS="${process.env.SUPER_ADMIN_EMAILS}"`);
+console.log(`[CONFIG] NODE_ENV=${process.env.NODE_ENV} SUPER_ADMIN_EMAILS="${process.env.SUPER_ADMIN_EMAILS}"`);
 
 export default {
     port: process.env.PORT || 3000,
