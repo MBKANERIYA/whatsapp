@@ -101,6 +101,8 @@ export const superAdminOnly = (req, res, next) => {
 
   const superAdminEmails = config.superAdminEmails || [];
 
+  console.log(`[SUPER_ADMIN] user.email="${req.user.email}" allowed=${JSON.stringify(superAdminEmails)}`);
+
   if (!superAdminEmails.includes(req.user.email)) {
     return res.status(403).json({ error: 'Super admin access required' });
   }
