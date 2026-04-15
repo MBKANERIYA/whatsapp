@@ -180,6 +180,7 @@ const migrate = async () => {
       body_text TEXT NOT NULL,
       has_header_image BOOLEAN DEFAULT FALSE,
       footer_text VARCHAR(60),
+      buttons_json TEXT,
       call_button_text VARCHAR(25),
       call_button_phone VARCHAR(20),
       status VARCHAR(50) DEFAULT 'PENDING',
@@ -248,6 +249,17 @@ const migrate = async () => {
   try {
     await pool.execute(`ALTER TABLE tenants MODIFY COLUMN subscription_plan ENUM('trial','basic','pro','enterprise','paid') DEFAULT 'trial'`);
   } catch (error) { /* already updated */ }
+
+  const alterMigrations = [
+    `ALTER TABLE whatsapp_templates ADD COLUMN buttons_json TEXT AFTER footer_text`,
+  ];
+  for (const sql of alterMigrations) {
+    try {
+      await pool.execute(sql);
+    } catch (error) {
+      if (!error.message.includes('Duplicate column')) { /* column already exists */ }
+    }
+  }
 
   // --------------------------------------------------------
   // Seed subscription plans

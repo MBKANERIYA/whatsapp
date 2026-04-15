@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { query, run, get } from '../database.js';
+import { query, run, get, getTenantById } from '../database.js';
 import { sendTemplateMessage, sendBulkMessages, normalizePhone, uploadMediaForTemplate, createTemplate, fetchTemplates, deleteTemplate } from '../services/whatsapp.js';
 import { checkWhatsAppEnabled } from '../middleware/limits.js';
 
@@ -173,6 +173,19 @@ router.post('/broadcast', async (req, res) => {
 
 async function processBroadcast(campaignId, recipients, campaignName, templateParams, languageCode, tenant, tenantId) {
     try {
+        // Step 1: Reload tenant from DB to get fresh WhatsApp credentials (cache may be stale)
+        console.log(`[Broadcast #${campaignId}] Step 1: Reloading tenant ${tenantId} from DB...`);
+        const freshTenant = await getTenantById(tenantId);
+        if (!freshTenant) {
+            throw new Error(`Tenant ${tenantId} not found in database`);
+        }
+        if (!freshTenant.whatsapp_access_token || !freshTenant.whatsapp_phone_number_id) {
+            throw new Error('WhatsApp credentials missing. Please reconfigure in Settings.');
+        }
+        console.log(`[Broadcast #${campaignId}] Tenant loaded. WhatsApp configured: ${freshTenant.whatsapp_configured}, WABA ID: ${freshTenant.whatsapp_business_account_id || 'MISSING'}`);
+
+        // Step 2: Insert pending message records
+        console.log(`[Broadcast #${campaignId}] Step 2: Inserting ${recipients.length} pending message records...`);
         for (const r of recipients) {
             await run(
                 `INSERT INTO whatsapp_messages (tenant_id, campaign_id, phone, recipient_name, recipient_id, status)
@@ -180,9 +193,17 @@ async function processBroadcast(campaignId, recipients, campaignName, templatePa
                 [tenantId, campaignId, normalizePhone(r.phone) || r.phone, r.name, r.id]
             );
         }
+        console.log(`[Broadcast #${campaignId}] Pending records inserted.`);
 
-        const results = await sendBulkMessages(recipients, campaignName, templateParams, 50, 1000, languageCode, tenant);
+        // Step 3: Send messages via Meta API (using fresh tenant credentials)
+        console.log(`[Broadcast #${campaignId}] Step 3: Sending ${recipients.length} messages via Meta API (template: ${campaignName})...`);
+        const results = await sendBulkMessages(recipients, campaignName, templateParams, 50, 1000, languageCode, freshTenant);
+        console.log(`[Broadcast #${campaignId}] Send complete. Success: ${results.successful}, Failed: ${results.failed}`);
+        if (results.errors.length > 0) {
+            console.log(`[Broadcast #${campaignId}] Errors:`, results.errors.slice(0, 5));
+        }
 
+        // Step 4: Update message statuses in DB
         for (const msg of results.messageIds) {
             await run(
                 `UPDATE whatsapp_messages SET status = 'sent', sent_at = CURRENT_TIMESTAMP, provider_message_id = ? WHERE campaign_id = ? AND phone = ? AND tenant_id = ?`,
@@ -197,6 +218,7 @@ async function processBroadcast(campaignId, recipients, campaignName, templatePa
             );
         }
 
+        // Step 5: Mark campaign completed
         await run(`
             UPDATE whatsapp_campaigns 
             SET status = 'completed', successful_count = ?, failed_count = ?, completed_at = NOW(), error_log = ?
@@ -208,12 +230,17 @@ async function processBroadcast(campaignId, recipients, campaignName, templatePa
             campaignId,
             tenantId,
         ]);
+        console.log(`[Broadcast #${campaignId}] Campaign marked completed.`);
     } catch (error) {
-        console.error('Broadcast processing fatal error:', error);
-        await run(
-            `UPDATE whatsapp_campaigns SET status = 'failed', error_log = ? WHERE id = ? AND tenant_id = ?`,
-            [error.message, campaignId, tenantId]
-        );
+        console.error(`[Broadcast #${campaignId}] FATAL ERROR:`, error.message, error.stack);
+        try {
+            await run(
+                `UPDATE whatsapp_campaigns SET status = 'failed', error_log = ? WHERE id = ? AND tenant_id = ?`,
+                [error.message, campaignId, tenantId]
+            );
+        } catch (dbErr) {
+            console.error(`[Broadcast #${campaignId}] Failed to update campaign status:`, dbErr.message);
+        }
     }
 }
 

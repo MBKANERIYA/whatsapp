@@ -267,6 +267,11 @@ export default function WhatsAppBroadcast() {
                             <h2>Campaign: {campaignDetail.campaign_name}</h2>
                             <button className="btn-icon" onClick={() => setCampaignDetail(null)}><Icon name="close" size={20} /></button>
                         </div>
+                        {campaignDetail.status === 'failed' && campaignDetail.error_log && (
+                            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px 16px', margin: '12px 0', color: '#dc2626', fontSize: '13px' }}>
+                                <strong>Error:</strong> {campaignDetail.error_log}
+                            </div>
+                        )}
                         <div style={{ display: 'grid', grid: 'auto / 1fr 1fr 1fr', gap: '12px', margin: '16px 0' }}>
                             <div className="stat-card">
                                 <div className="stat-value">{campaignDetail.total_recipients}</div>
@@ -555,6 +560,11 @@ export default function WhatsAppBroadcast() {
                                     <span className={`status-badge status-badge--${c.status === 'completed' ? 'success' : c.status === 'processing' ? 'warning' : c.status === 'failed' ? 'danger' : 'info'}`}>
                                         {c.status}
                                     </span>
+                                    {c.status === 'failed' && c.error_log && (
+                                        <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.error_log}>
+                                            {c.error_log}
+                                        </div>
+                                    )}
                                 </td>
                                 <td>
                                     <button className="btn btn--outline" style={{ fontSize: '12px', padding: '4px 10px' }} onClick={() => viewCampaign(c.id)}>View</button>

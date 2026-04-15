@@ -278,7 +278,7 @@ export async function sendBulkMessages(recipients, campaignName, templateParams 
         });
 
         await Promise.all(batchPromises);
-        if (i + batchSize < uniqueRecipients.length) await new Promise(resolve => setTimeout(resolve, delayMs));
+        if (i + actualBatch < validRecipients.length) await new Promise(resolve => setTimeout(resolve, delayMs));
     }
 
     return results;
