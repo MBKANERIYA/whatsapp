@@ -505,18 +505,89 @@ export default function WhatsAppBroadcast() {
                 )}
 
                 {/* Preview */}
-                {selectedTemplate && (
-                    <div style={{ background: '#dcf8c6', padding: '16px', borderRadius: '12px', maxWidth: '380px', margin: '16px 0', fontFamily: 'system-ui', fontSize: '14px', lineHeight: '1.5' }}>
-                        <div style={{ fontWeight: 500 }}>
-                            {selectedTemplate.components?.find(c => c.type === 'BODY')?.text?.replace(/\{\{(\d+)\}\}/g, (_, idx) => templateParams[parseInt(idx) - 1] || `{{${idx}}}`) || 'Preview'}
-                        </div>
-                        {selectedTemplate.components?.find(c => c.type === 'FOOTER') && (
-                            <div style={{ fontSize: '12px', opacity: 0.6, marginTop: '8px' }}>
-                                {selectedTemplate.components.find(c => c.type === 'FOOTER').text}
+                {selectedTemplate && (() => {
+                    const bodyComp = selectedTemplate.components?.find(c => c.type === 'BODY');
+                    const footerComp = selectedTemplate.components?.find(c => c.type === 'FOOTER');
+                    const headerComp = selectedTemplate.components?.find(c => c.type === 'HEADER');
+                    const buttonsComp = selectedTemplate.components?.find(c => c.type === 'BUTTONS');
+                    const bodyText = bodyComp?.text?.replace(/\{\{(\d+)\}\}/g, (_, idx) => templateParams[parseInt(idx) - 1] || `{{${idx}}}`) || '';
+                    const hasHeaderImage = headerComp?.format === 'IMAGE';
+                    const headerExample = headerComp?.example?.header_handle?.[0];
+
+                    return (
+                        <div style={{
+                            background: '#e5ddd5',
+                            backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'400\' height=\'400\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'p\' width=\'80\' height=\'80\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M0 40h80M40 0v80\' stroke=\'%23d4ccb8\' stroke-width=\'0.5\' fill=\'none\' opacity=\'0.3\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect fill=\'url(%23p)\' width=\'400\' height=\'400\'/%3E%3C/svg%3E")',
+                            borderRadius: '12px', padding: '20px 16px',
+                            maxWidth: '380px', margin: '16px 0',
+                        }}>
+                            <div style={{
+                                background: '#ffffff', borderRadius: '0 8px 8px 8px',
+                                overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+                            }}>
+                                {/* Header Image */}
+                                {hasHeaderImage && headerExample && (
+                                    <img src={headerExample} style={{
+                                        width: '100%', height: '150px',
+                                        objectFit: 'cover', display: 'block',
+                                    }} />
+                                )}
+                                {hasHeaderImage && !headerExample && (
+                                    <div style={{
+                                        width: '100%', height: '150px', background: '#f0f2f5',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        color: '#8696a0', fontSize: '13px',
+                                    }}>
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8696a0" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                                    </div>
+                                )}
+
+                                {/* Body + Footer + Timestamp */}
+                                <div style={{ padding: '6px 8px 4px' }}>
+                                    <div style={{
+                                        fontSize: '14px', color: '#111b21',
+                                        lineHeight: '1.45', whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                    }}>{bodyText}</div>
+
+                                    {footerComp && (
+                                        <div style={{
+                                            fontSize: '12px', color: '#8696a0', marginTop: '4px',
+                                        }}>{footerComp.text}</div>
+                                    )}
+
+                                    <div style={{
+                                        fontSize: '11px', color: '#8696a0',
+                                        textAlign: 'right', marginTop: '2px',
+                                    }}>
+                                        {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                    </div>
+                                </div>
+
+                                {/* Buttons */}
+                                {buttonsComp?.buttons?.map((btn, idx) => (
+                                    <div key={idx} style={{
+                                        borderTop: '1px solid #e9ecef',
+                                        padding: '10px 8px', textAlign: 'center',
+                                        display: 'flex', alignItems: 'center',
+                                        justifyContent: 'center', gap: '6px',
+                                    }}>
+                                        {btn.type === 'PHONE_NUMBER' && (
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#25D366" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                        )}
+                                        {btn.type === 'URL' && (
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00a5f4" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+                                        )}
+                                        {btn.type === 'QUICK_REPLY' && (
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00a5f4" strokeWidth="2"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></svg>
+                                        )}
+                                        <span style={{ fontSize: '14px', color: btn.type === 'PHONE_NUMBER' ? '#25D366' : '#00a5f4', fontWeight: 500 }}>{btn.text}</span>
+                                    </div>
+                                ))}
                             </div>
-                        )}
-                    </div>
-                )}
+                        </div>
+                    );
+                })()}
 
                 {/* Send */}
                 <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
