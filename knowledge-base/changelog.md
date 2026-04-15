@@ -4,6 +4,17 @@ All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronolog
 
 ---
 
+## 2026-04-15 — Fix: Broadcast Messages Not Sending (All Campaigns Failed)
+**What**: Fixed broadcasts showing 0 sent / 0 failed / status "Failed"
+**Why**: `processBroadcast` background function crashed before sending messages; error was hidden from UI
+**Files Changed**: `backend/src/routes/whatsapp.js`, `backend/src/database.js`, `frontend/src/components/WhatsAppBroadcast.jsx`
+**Commit**: `4c63172`
+- Reload tenant from DB in `processBroadcast` instead of using potentially stale cache object
+- Show `error_log` in campaign history table and campaign detail modal
+- Added step-by-step console.log in `processBroadcast` for server-side debugging
+- Added missing `buttons_json` column to `whatsapp_templates` table migration
+- Wrapped the catch block's DB update in its own try/catch to prevent silent failures
+
 ## 2026-04-14 — Admin Panel for Tenant Management
 **What**: Added super admin panel to manage user accounts (temporary dev tool)
 **Why**: Need to upgrade/suspend/delete tenants during development without direct DB access

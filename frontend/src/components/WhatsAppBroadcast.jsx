@@ -702,7 +702,7 @@ export default function WhatsAppBroadcast() {
                             </form>
                         </div>
 
-                        {/* ── Live Preview (WhatsApp Phone Mockup) ── */}
+                        {/* ── Live Preview (WhatsApp Light Style) ── */}
                         <div style={{ position: 'sticky', top: '32px' }}>
                             <div style={{
                                 fontSize: '11px', fontWeight: 600, textTransform: 'uppercase',
@@ -710,148 +710,96 @@ export default function WhatsAppBroadcast() {
                                 marginBottom: '8px', paddingLeft: '4px',
                             }}>Live Preview</div>
 
-                            {/* Phone Frame */}
+                            {/* WhatsApp Chat Background */}
                             <div style={{
-                                background: '#0B141A', borderRadius: '24px',
-                                padding: '12px 8px', boxShadow: 'var(--shadow-lg)',
-                                overflow: 'hidden',
+                                background: '#e5ddd5',
+                                backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'400\' height=\'400\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'p\' width=\'80\' height=\'80\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M0 40h80M40 0v80\' stroke=\'%23d4ccb8\' stroke-width=\'0.5\' fill=\'none\' opacity=\'0.3\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect fill=\'url(%23p)\' width=\'400\' height=\'400\'/%3E%3C/svg%3E")',
+                                borderRadius: '16px', padding: '24px 16px',
+                                minHeight: '200px', display: 'flex', flexDirection: 'column',
+                                justifyContent: 'center', boxShadow: 'var(--shadow-md)',
                             }}>
-                                {/* Status Bar */}
+                                {/* Message Bubble */}
                                 <div style={{
-                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                    padding: '4px 12px 8px', fontSize: '11px', color: '#aaa',
+                                    background: '#ffffff', borderRadius: '0 8px 8px 8px',
+                                    maxWidth: '300px', overflow: 'hidden',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
                                 }}>
-                                    <span>9:41</span>
-                                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2"><path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.56 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#aaa"><rect x="1" y="6" width="3" height="12" rx="1"/><rect x="7" y="4" width="3" height="14" rx="1"/><rect x="13" y="2" width="3" height="16" rx="1"/><rect x="19" y="0" width="3" height="18" rx="1"/></svg>
-                                    </div>
-                                </div>
+                                    {/* Header Image */}
+                                    {tplImagePreview && (
+                                        <img src={tplImagePreview} style={{
+                                            width: '100%', height: '160px',
+                                            objectFit: 'cover', display: 'block',
+                                        }} />
+                                    )}
 
-                                {/* WhatsApp Header */}
-                                <div style={{
-                                    background: '#1F2C34', padding: '10px 14px',
-                                    display: 'flex', alignItems: 'center', gap: '10px',
-                                    borderRadius: '0',
-                                }}>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
-                                    <div style={{
-                                        width: '32px', height: '32px', borderRadius: '50%',
-                                        background: '#25D366', display: 'flex', alignItems: 'center',
-                                        justifyContent: 'center', fontSize: '14px', fontWeight: 700, color: '#fff',
-                                    }}>B</div>
-                                    <div>
-                                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#e9edef' }}>Business</div>
-                                        <div style={{ fontSize: '10px', color: '#8696a0' }}>online</div>
-                                    </div>
-                                </div>
+                                    {/* Body + Footer + Timestamp */}
+                                    <div style={{ padding: '6px 8px 4px' }}>
+                                        <div style={{
+                                            fontSize: '14px', color: '#111b21',
+                                            lineHeight: '1.45', whiteSpace: 'pre-wrap',
+                                            wordBreak: 'break-word',
+                                        }}>
+                                            {tplBody
+                                                ? tplBody.replace(/\{\{(\d+)\}\}/g, (_, n) => `[Variable ${n}]`)
+                                                : <span style={{ color: '#8696a0', fontStyle: 'italic' }}>Your message body will appear here...</span>
+                                            }
+                                        </div>
 
-                                {/* Chat Area */}
-                                <div style={{
-                                    background: '#0B141A',
-                                    backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'200\' height=\'200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'p\' width=\'40\' height=\'40\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M0 20h40M20 0v40\' stroke=\'%23ffffff06\' fill=\'none\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect fill=\'url(%23p)\' width=\'200\' height=\'200\'/%3E%3C/svg%3E")',
-                                    minHeight: '320px', padding: '16px 10px',
-                                    display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-                                }}>
-                                    {/* Message Bubble */}
-                                    <div style={{
-                                        background: '#1F2C34', borderRadius: '0 8px 8px 8px',
-                                        padding: '0', maxWidth: '280px', overflow: 'hidden',
-                                        boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
-                                    }}>
-                                        {/* Header Image */}
-                                        {tplImagePreview && (
-                                            <img src={tplImagePreview} style={{
-                                                width: '100%', height: '140px',
-                                                objectFit: 'cover', display: 'block',
-                                            }} />
+                                        {/* Footer */}
+                                        {tplFooter && (
+                                            <div style={{
+                                                fontSize: '12px', color: '#8696a0',
+                                                marginTop: '4px',
+                                            }}>{tplFooter}</div>
                                         )}
 
-                                        {/* Body */}
-                                        <div style={{ padding: '8px 10px 4px' }}>
-                                            <div style={{
-                                                fontSize: '13px', color: '#e9edef',
-                                                lineHeight: '1.45', whiteSpace: 'pre-wrap',
-                                                wordBreak: 'break-word',
-                                            }}>
-                                                {tplBody
-                                                    ? tplBody.replace(/\{\{(\d+)\}\}/g, (_, n) => `[Variable ${n}]`)
-                                                    : <span style={{ color: '#8696a0', fontStyle: 'italic' }}>Your message body will appear here...</span>
-                                                }
-                                            </div>
-
-                                            {/* Footer */}
-                                            {tplFooter && (
-                                                <div style={{
-                                                    fontSize: '11px', color: '#8696a0',
-                                                    marginTop: '4px',
-                                                }}>{tplFooter}</div>
-                                            )}
-
-                                            {/* Timestamp */}
-                                            <div style={{
-                                                fontSize: '10px', color: '#8696a0',
-                                                textAlign: 'right', marginTop: '2px',
-                                                display: 'flex', justifyContent: 'flex-end',
-                                                alignItems: 'center', gap: '3px',
-                                            }}>
-                                                9:41 AM
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#53bdeb" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12l5 5L18 6"/></svg>
-                                            </div>
-                                        </div>
-
-                                        {/* Action Buttons */}
-                                        {tplButtons.filter(b => b.text?.trim()).map((btn, idx) => (
-                                            <div key={idx} style={{
-                                                borderTop: '1px solid rgba(255,255,255,0.06)',
-                                                padding: '10px',
-                                                textAlign: 'center',
-                                                display: 'flex', alignItems: 'center',
-                                                justifyContent: 'center', gap: '6px',
-                                            }}>
-                                                {btn.type === 'PHONE_NUMBER' && (
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#53bdeb" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                                                )}
-                                                {btn.type === 'URL' && (
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#53bdeb" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
-                                                )}
-                                                {btn.type === 'QUICK_REPLY' && (
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#53bdeb" strokeWidth="2"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></svg>
-                                                )}
-                                                <span style={{ fontSize: '13px', color: '#53bdeb', fontWeight: 500 }}>{btn.text}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Template Name Badge */}
-                                    {tplName && (
+                                        {/* Timestamp */}
                                         <div style={{
-                                            marginTop: '8px', fontSize: '10px',
-                                            color: '#8696a0', textAlign: 'center',
+                                            fontSize: '11px', color: '#8696a0',
+                                            textAlign: 'right', marginTop: '2px',
+                                            display: 'flex', justifyContent: 'flex-end',
+                                            alignItems: 'center', gap: '3px',
                                         }}>
-                                            Template: <span style={{ color: '#53bdeb' }}>{tplName}</span>
-                                            {' · '}{tplCategory.toLowerCase()} · {tplLanguage}
+                                            {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
                                         </div>
-                                    )}
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    {tplButtons.filter(b => b.text?.trim()).map((btn, idx) => (
+                                        <div key={idx} style={{
+                                            borderTop: '1px solid #e9ecef',
+                                            padding: '10px 8px',
+                                            textAlign: 'center',
+                                            display: 'flex', alignItems: 'center',
+                                            justifyContent: 'center', gap: '6px',
+                                        }}>
+                                            {btn.type === 'PHONE_NUMBER' && (
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#25D366" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                            )}
+                                            {btn.type === 'URL' && (
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00a5f4" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+                                            )}
+                                            {btn.type === 'QUICK_REPLY' && (
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00a5f4" strokeWidth="2"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></svg>
+                                            )}
+                                            <span style={{ fontSize: '14px', color: btn.type === 'PHONE_NUMBER' ? '#25D366' : '#00a5f4', fontWeight: 500 }}>{btn.text}</span>
+                                        </div>
+                                    ))}
                                 </div>
 
-                                {/* Input Bar */}
-                                <div style={{
-                                    background: '#1F2C34', padding: '8px 10px',
-                                    display: 'flex', alignItems: 'center', gap: '8px',
-                                }}>
+                                {/* Template Name Badge */}
+                                {tplName && (
                                     <div style={{
-                                        flex: 1, background: '#2A3942', borderRadius: '20px',
-                                        padding: '8px 14px', fontSize: '12px', color: '#8696a0',
-                                    }}>Type a message</div>
-                                    <div style={{
-                                        width: '34px', height: '34px', borderRadius: '50%',
-                                        background: '#25D366', display: 'flex',
-                                        alignItems: 'center', justifyContent: 'center',
+                                        marginTop: '10px', fontSize: '10px',
+                                        color: '#667781', textAlign: 'center',
+                                        background: 'rgba(255,255,255,0.6)', borderRadius: '8px',
+                                        padding: '4px 10px', display: 'inline-block',
+                                        alignSelf: 'center',
                                     }}>
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                                        Template: <span style={{ fontWeight: 600, color: '#25D366' }}>{tplName}</span>
+                                        {' · '}{tplCategory.toLowerCase()} · {tplLanguage}
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     </div>
