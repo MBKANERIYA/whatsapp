@@ -96,7 +96,7 @@ router.get('/conversations', async (req, res) => {
                     FROM whatsapp_conversations wc
                     LEFT JOIN contacts c ON wc.contact_id = c.id
                     WHERE wc.tenant_id = ? AND wc.is_archived = ?`;
-        const params = [req.tenantId, archived === '1'];
+        const params = [req.tenantId, archived === '1' ? 1 : 0];
 
         if (search) {
             sql += ' AND (wc.contact_name LIKE ? OR wc.phone LIKE ?)';

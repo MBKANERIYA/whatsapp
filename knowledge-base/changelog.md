@@ -15,6 +15,25 @@ All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronolog
 - Added missing `buttons_json` column to `whatsapp_templates` table migration
 - Wrapped the catch block's DB update in its own try/catch to prevent silent failures
 
+## 2026-04-15 — Feature: Start New Chat from Inbox
+**What**: Added ability to start new WhatsApp conversations from the Chat Inbox
+**Why**: Chat Inbox had no way to initiate conversations — only showed replies to broadcasts
+**Files Changed**: `backend/src/routes/whatsapp-chat.js`, `frontend/src/components/WhatsAppChat.jsx`, `frontend/src/stores/store.js`
+**Commit**: `d75c69c`
+- Green "+" button next to search bar to start new conversation
+- Two-step modal: (1) Enter phone or select from contacts list (2) Pick template + fill variables
+- WhatsApp-style inline preview of template before sending
+- Backend `POST /conversations/new` creates/finds conversation, sends template, stores message
+- "Start New Chat" CTA button shown when conversation list is empty
+- Contact search with hover effects and arrow icon
+
+## 2026-04-15 — Fix: LIMIT/OFFSET Prepared Statement in Chat
+**What**: Fixed `ER_WRONG_ARGUMENTS` crash in chat conversations and messages queries
+**Why**: MySQL `pool.execute()` doesn't support `?` placeholders for LIMIT/OFFSET
+**Files Changed**: `backend/src/routes/whatsapp-chat.js`
+**Commit**: `0ea06a5`
+- Inlined LIMIT and OFFSET as `parseInt()` values in both conversation list and message list queries
+
 ## 2026-04-14 — Admin Panel for Tenant Management
 **What**: Added super admin panel to manage user accounts (temporary dev tool)
 **Why**: Need to upgrade/suspend/delete tenants during development without direct DB access
