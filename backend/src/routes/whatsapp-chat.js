@@ -34,8 +34,9 @@ router.get('/conversations', async (req, res) => {
             params.push(`%${search}%`, `%${search}%`);
         }
 
-        sql += ' ORDER BY wc.last_message_at DESC LIMIT ? OFFSET ?';
-        params.push(parseInt(limit), offset);
+        const safeLimit = parseInt(limit) || 30;
+        const safeOffset = Math.max(0, offset);
+        sql += ` ORDER BY wc.last_message_at DESC LIMIT ${safeLimit} OFFSET ${safeOffset}`;
 
         const conversations = await query(sql, params);
 
@@ -77,14 +78,17 @@ router.get('/conversations/:id/messages', async (req, res) => {
         );
         if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
 
+        const safeLimit = parseInt(limit) || 50;
+        const safeOffset = Math.max(0, offset);
+
         const messages = await query(
             `SELECT wcm.*, u.name as sender_name
              FROM whatsapp_chat_messages wcm
              LEFT JOIN users u ON wcm.sent_by = u.id
              WHERE wcm.conversation_id = ? AND wcm.tenant_id = ?
              ORDER BY wcm.created_at ASC
-             LIMIT ? OFFSET ?`,
-            [req.params.id, req.tenantId, parseInt(limit), offset]
+             LIMIT ${safeLimit} OFFSET ${safeOffset}`,
+            [req.params.id, req.tenantId]
         );
 
         const total = await get(
