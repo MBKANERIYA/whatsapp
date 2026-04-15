@@ -6,8 +6,9 @@ export default function WhatsAppChat() {
     const {
         conversations, totalUnread, activeConversation, chatMessages,
         fetchConversations, fetchChatMessages, sendChatReply, sendChatTemplate,
-        markConversationRead, archiveConversation, showToast,
-        fetchWhatsAppTemplates, whatsappTemplates,
+        markConversationRead, archiveConversation, startNewConversation,
+        showToast, fetchWhatsAppTemplates, whatsappTemplates,
+        contacts, fetchContacts,
     } = useStore();
 
     const [search, setSearch] = useState('');
@@ -21,12 +22,22 @@ export default function WhatsAppChat() {
     const pollRef = useRef(null);
     const [mobileShowChat, setMobileShowChat] = useState(false);
 
+    // New Chat modal state
+    const [showNewChat, setShowNewChat] = useState(false);
+    const [newChatPhone, setNewChatPhone] = useState('');
+    const [newChatName, setNewChatName] = useState('');
+    const [newChatTemplate, setNewChatTemplate] = useState('');
+    const [newChatParams, setNewChatParams] = useState(['', '', '']);
+    const [newChatSearch, setNewChatSearch] = useState('');
+    const [newChatSending, setNewChatSending] = useState(false);
+    const [newChatStep, setNewChatStep] = useState(1);
+
     // Initial load + polling
     useEffect(() => {
         fetchConversations();
         fetchWhatsAppTemplates();
+        fetchContacts();
 
-        // Poll every 8 seconds
         pollRef.current = setInterval(() => {
             fetchConversations(search);
             if (selectedConvId) fetchChatMessages(selectedConvId);
@@ -35,13 +46,11 @@ export default function WhatsAppChat() {
         return () => clearInterval(pollRef.current);
     }, []);
 
-    // Search debounce
     useEffect(() => {
         const timer = setTimeout(() => fetchConversations(search), 300);
         return () => clearTimeout(timer);
     }, [search]);
 
-    // Scroll to bottom when messages change
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [chatMessages]);
@@ -109,18 +118,59 @@ export default function WhatsAppChat() {
     };
 
     const statusIcon = (status) => {
-        if (status === 'sent') return '✓';
-        if (status === 'delivered') return '✓✓';
-        if (status === 'read') return '✓✓';
-        if (status === 'failed') return '✗';
-        return '⏳';
+        if (status === 'sent') return '\u2713';
+        if (status === 'delivered') return '\u2713\u2713';
+        if (status === 'read') return '\u2713\u2713';
+        if (status === 'failed') return '\u2717';
+        return '\u23F3';
     };
 
     const approvedTemplates = (whatsappTemplates || []).filter(t => t.status === 'APPROVED');
-
     const conv = activeConversation;
     const isWindowOpen = conv?.is_window_open;
     const windowMinutes = conv?.window_remaining_minutes || 0;
+
+    const filteredNewChatContacts = (contacts || []).filter(c => {
+        if (!newChatSearch) return true;
+        const q = newChatSearch.toLowerCase();
+        return (c.name || '').toLowerCase().includes(q) || (c.phone || '').includes(q);
+    });
+
+    const openNewChatModal = () => {
+        setShowNewChat(true);
+        setNewChatStep(1);
+        setNewChatPhone('');
+        setNewChatName('');
+        setNewChatTemplate('');
+        setNewChatParams(['', '', '']);
+        setNewChatSearch('');
+        fetchContacts();
+    };
+
+    const selectContact = (contact) => {
+        setNewChatPhone(contact.phone);
+        setNewChatName(contact.name);
+        setNewChatStep(2);
+    };
+
+    const handleStartNewChat = async () => {
+        if (!newChatPhone.trim() || !newChatTemplate) return;
+        setNewChatSending(true);
+        try {
+            const result = await startNewConversation(
+                newChatPhone.trim(), newChatName.trim(), newChatTemplate,
+                newChatParams.filter(Boolean)
+            );
+            setShowNewChat(false);
+            showToast('Template sent! Conversation started.');
+            if (result?.conversationId) {
+                await openConversation(result.conversationId);
+            }
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+        setNewChatSending(false);
+    };
 
     return (
         <div className="page-container" style={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}>
@@ -136,20 +186,48 @@ export default function WhatsAppChat() {
             <div className="chat-layout" style={{ flex: 1, display: 'flex', gap: '0', border: '1px solid var(--border, #e2e8f0)', borderRadius: '12px', overflow: 'hidden', minHeight: 0 }}>
                 {/* Left: Conversation List */}
                 <div className={`chat-sidebar${mobileShowChat ? ' hidden-mobile' : ''}`} style={{ width: '340px', flexShrink: 0, borderRight: '1px solid var(--border, #e2e8f0)', display: 'flex', flexDirection: 'column', background: 'var(--surface, #fff)' }}>
-                    {/* Search */}
-                    <div style={{ padding: '12px', borderBottom: '1px solid var(--border, #e2e8f0)' }}>
-                        <div className="search-bar" style={{ margin: 0 }}>
+                    {/* Search + New Chat Button */}
+                    <div style={{ padding: '12px', borderBottom: '1px solid var(--border, #e2e8f0)', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <div className="search-bar" style={{ margin: 0, flex: 1 }}>
                             <Icon name="search" size={16} />
                             <input type="text" value={search} onInput={e => setSearch(e.target.value)}
                                 placeholder="Search chats..." className="search-input" style={{ fontSize: '13px' }} />
                         </div>
+                        <button
+                            onClick={openNewChatModal}
+                            title="New Chat"
+                            style={{
+                                width: '38px', height: '38px', borderRadius: '50%',
+                                background: '#25d366', color: '#fff', border: 'none',
+                                cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                justifyContent: 'center', flexShrink: 0,
+                                boxShadow: '0 2px 6px rgba(37,211,102,0.3)',
+                                transition: 'transform 0.15s, box-shadow 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(37,211,102,0.4)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(37,211,102,0.3)'; }}
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                                <line x1="12" y1="8" x2="12" y2="16"/>
+                                <line x1="8" y1="12" x2="16" y2="12"/>
+                            </svg>
+                        </button>
                     </div>
 
                     {/* Conversation List */}
                     <div style={{ flex: 1, overflowY: 'auto' }}>
                         {conversations.length === 0 ? (
-                            <div style={{ padding: '40px 20px', textAlign: 'center', opacity: 0.5, fontSize: '13px' }}>
-                                No conversations yet. Conversations appear when contacts reply to your broadcasts.
+                            <div style={{ padding: '40px 20px', textAlign: 'center', fontSize: '13px' }}>
+                                <div style={{ opacity: 0.3, marginBottom: '16px' }}>
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                                    </svg>
+                                </div>
+                                <div style={{ opacity: 0.5, marginBottom: '12px' }}>No conversations yet</div>
+                                <button className="btn btn--success" style={{ fontSize: '13px', padding: '8px 16px' }} onClick={openNewChatModal}>
+                                    + Start New Chat
+                                </button>
                             </div>
                         ) : conversations.map(c => (
                             <div
@@ -229,14 +307,14 @@ export default function WhatsAppChat() {
                                             fontSize: '11px', padding: '4px 10px', borderRadius: '12px',
                                             background: '#dcfce7', color: '#16a34a', fontWeight: 600,
                                         }}>
-                                            🟢 Window open ({windowMinutes > 60 ? `${Math.floor(windowMinutes / 60)}h ${windowMinutes % 60}m` : `${windowMinutes}m`})
+                                            {'\uD83D\uDFE2'} Window open ({windowMinutes > 60 ? `${Math.floor(windowMinutes / 60)}h ${windowMinutes % 60}m` : `${windowMinutes}m`})
                                         </span>
                                     ) : (
                                         <span style={{
                                             fontSize: '11px', padding: '4px 10px', borderRadius: '12px',
                                             background: '#fef2f2', color: '#dc2626', fontWeight: 600,
                                         }}>
-                                            🔴 Window closed
+                                            {'\uD83D\uDD34'} Window closed
                                         </span>
                                     )}
                                     <button className="btn-icon" onClick={() => archiveConversation(selectedConvId)} title="Archive">
@@ -263,16 +341,16 @@ export default function WhatsAppChat() {
                                                 <div style={{ fontSize: '10px', opacity: 0.5, marginBottom: '4px', fontStyle: 'italic' }}>Template</div>
                                             )}
                                             {msg.message_type === 'image' && (
-                                                <div style={{ fontSize: '12px', opacity: 0.6, marginBottom: '4px' }}>📷 Image</div>
+                                                <div style={{ fontSize: '12px', opacity: 0.6, marginBottom: '4px' }}>{'\uD83D\uDCF7'} Image</div>
                                             )}
                                             {msg.message_type === 'video' && (
-                                                <div style={{ fontSize: '12px', opacity: 0.6, marginBottom: '4px' }}>🎥 Video</div>
+                                                <div style={{ fontSize: '12px', opacity: 0.6, marginBottom: '4px' }}>{'\uD83C\uDFA5'} Video</div>
                                             )}
                                             {msg.message_type === 'document' && (
-                                                <div style={{ fontSize: '12px', opacity: 0.6, marginBottom: '4px' }}>📄 Document</div>
+                                                <div style={{ fontSize: '12px', opacity: 0.6, marginBottom: '4px' }}>{'\uD83D\uDCC4'} Document</div>
                                             )}
                                             {msg.message_type === 'audio' && (
-                                                <div style={{ fontSize: '12px', opacity: 0.6, marginBottom: '4px' }}>🎵 Audio</div>
+                                                <div style={{ fontSize: '12px', opacity: 0.6, marginBottom: '4px' }}>{'\uD83C\uDFB5'} Audio</div>
                                             )}
                                             <div style={{ fontSize: '14px', lineHeight: '1.4', wordBreak: 'break-word' }}>
                                                 {msg.body || ''}
@@ -303,7 +381,7 @@ export default function WhatsAppChat() {
                                     padding: '8px 16px', background: '#fef3c7', borderTop: '1px solid #fcd34d',
                                     fontSize: '13px', color: '#92400e', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                 }}>
-                                    <span>⚠️ 24-hour window expired. You can only send templates.</span>
+                                    <span>{'\u26A0\uFE0F'} 24-hour window expired. You can only send templates.</span>
                                     <button className="btn btn--outline" style={{ fontSize: '12px', padding: '4px 10px' }}
                                         onClick={() => setShowTemplatePicker(true)}>
                                         Send Template
@@ -321,7 +399,7 @@ export default function WhatsAppChat() {
                                     value={messageText}
                                     onInput={e => setMessageText(e.target.value)}
                                     onKeyDown={handleKeyDown}
-                                    placeholder={isWindowOpen ? "Type a message..." : "Window expired — use template"}
+                                    placeholder={isWindowOpen ? "Type a message..." : "Window expired \u2014 use template"}
                                     disabled={!isWindowOpen || sending}
                                     style={{
                                         flex: 1, resize: 'none', border: '1px solid var(--border, #e2e8f0)',
@@ -384,6 +462,179 @@ export default function WhatsAppChat() {
                                 {sending ? 'Sending...' : 'Send Template'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* New Chat Modal */}
+            {showNewChat && (
+                <div className="modal-backdrop" onClick={() => setShowNewChat(false)}>
+                    <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+                        <div className="modal-header">
+                            <h2>{newChatStep === 1 ? 'Start New Chat' : 'Select Template'}</h2>
+                            <button className="btn-icon" onClick={() => setShowNewChat(false)}><Icon name="close" size={20} /></button>
+                        </div>
+
+                        {newChatStep === 1 ? (
+                            <>
+                                {/* Direct Phone Entry */}
+                                <div style={{ padding: '0 0 12px', borderBottom: '1px solid var(--border, #e2e8f0)' }}>
+                                    <div className="form-group" style={{ marginBottom: '8px' }}>
+                                        <label className="form-label">Enter Phone Number</label>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <input
+                                                className="form-input"
+                                                value={newChatPhone}
+                                                onInput={e => setNewChatPhone(e.target.value)}
+                                                placeholder="e.g. 919876543210"
+                                                style={{ flex: 1 }}
+                                            />
+                                            <button
+                                                className="btn btn--primary"
+                                                disabled={!newChatPhone.trim()}
+                                                onClick={() => setNewChatStep(2)}
+                                                style={{ whiteSpace: 'nowrap' }}
+                                            >
+                                                Next {'\u2192'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="form-group" style={{ marginBottom: 0 }}>
+                                        <input
+                                            className="form-input"
+                                            value={newChatName}
+                                            onInput={e => setNewChatName(e.target.value)}
+                                            placeholder="Contact name (optional)"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Or Select from Contacts */}
+                                <div style={{ padding: '12px 0 8px' }}>
+                                    <label className="form-label" style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.6 }}>
+                                        Or select from contacts
+                                    </label>
+                                    <input
+                                        className="form-input"
+                                        value={newChatSearch}
+                                        onInput={e => setNewChatSearch(e.target.value)}
+                                        placeholder="Search contacts..."
+                                        style={{ marginBottom: '8px' }}
+                                    />
+                                </div>
+                                <div style={{ flex: 1, overflow: 'auto', maxHeight: '300px', border: '1px solid var(--border, #e2e8f0)', borderRadius: '8px' }}>
+                                    {filteredNewChatContacts.length === 0 ? (
+                                        <div style={{ padding: '20px', textAlign: 'center', opacity: 0.5, fontSize: '13px' }}>No contacts found</div>
+                                    ) : filteredNewChatContacts.slice(0, 50).map(c => (
+                                        <div
+                                            key={c.id}
+                                            onClick={() => c.phone && selectContact(c)}
+                                            style={{
+                                                padding: '10px 14px', cursor: c.phone ? 'pointer' : 'default',
+                                                borderBottom: '1px solid #f1f5f9',
+                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                opacity: c.phone ? 1 : 0.4,
+                                                transition: 'background 0.15s',
+                                            }}
+                                            onMouseEnter={e => { if (c.phone) e.currentTarget.style.background = '#f0fdf4'; }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                                        >
+                                            <div>
+                                                <div style={{ fontWeight: 500, fontSize: '14px' }}>{c.name}</div>
+                                                <div style={{ fontSize: '12px', opacity: 0.5, fontFamily: 'monospace' }}>{c.phone || 'No phone'}</div>
+                                            </div>
+                                            {c.phone && (
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#25d366" strokeWidth="2">
+                                                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                                                </svg>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                {/* Step 2: Template Selection */}
+                                <div style={{
+                                    padding: '8px 12px', background: '#f0fdf4', borderRadius: '8px', marginBottom: '12px',
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: '13px', fontWeight: 600 }}>{newChatName || newChatPhone}</div>
+                                        <div style={{ fontSize: '12px', opacity: 0.6, fontFamily: 'monospace' }}>{newChatPhone}</div>
+                                    </div>
+                                    <button className="btn btn--outline" style={{ fontSize: '12px', padding: '4px 10px' }} onClick={() => setNewChatStep(1)}>
+                                        {'\u2190'} Change
+                                    </button>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Select Template</label>
+                                    <select className="form-input" value={newChatTemplate} onChange={e => setNewChatTemplate(e.target.value)}>
+                                        <option value="">Choose an approved template</option>
+                                        {approvedTemplates.map(t => (
+                                            <option key={t.name} value={t.name}>{t.name} ({t.language})</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {newChatTemplate && (
+                                    <div className="form-group">
+                                        <label className="form-label">Template Variables (if any)</label>
+                                        {[0, 1, 2].map(i => (
+                                            <input key={i} className="form-input" value={newChatParams[i] || ''}
+                                                onInput={e => { const p = [...newChatParams]; p[i] = e.target.value; setNewChatParams(p); }}
+                                                placeholder={`Variable {{${i + 1}}}`} style={{ marginBottom: '8px' }} />
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* WhatsApp Preview */}
+                                {newChatTemplate && (() => {
+                                    const tpl = approvedTemplates.find(t => t.name === newChatTemplate);
+                                    const bodyComp = tpl?.components?.find(c => c.type === 'BODY');
+                                    const bodyText = bodyComp?.text?.replace(/\{\{(\d+)\}\}/g, (_, idx) => newChatParams[parseInt(idx) - 1] || `{{${idx}}}`) || '';
+                                    const buttonsComp = tpl?.components?.find(c => c.type === 'BUTTONS');
+                                    return (
+                                        <div style={{
+                                            background: '#e5ddd5', borderRadius: '10px', padding: '14px 12px',
+                                            marginBottom: '8px',
+                                        }}>
+                                            <div style={{
+                                                background: '#fff', borderRadius: '0 8px 8px 8px',
+                                                padding: '8px 10px', boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                                                maxWidth: '260px',
+                                            }}>
+                                                <div style={{ fontSize: '13px', color: '#111b21', lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>{bodyText}</div>
+                                                <div style={{ fontSize: '10px', color: '#8696a0', textAlign: 'right', marginTop: '2px' }}>
+                                                    {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                                </div>
+                                                {buttonsComp?.buttons?.map((btn, idx) => (
+                                                    <div key={idx} style={{
+                                                        borderTop: '1px solid #e9ecef', padding: '8px 6px',
+                                                        textAlign: 'center', fontSize: '13px',
+                                                        color: btn.type === 'PHONE_NUMBER' ? '#25D366' : '#00a5f4', fontWeight: 500,
+                                                    }}>
+                                                        {btn.text}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                                    <button className="btn btn--outline" onClick={() => setShowNewChat(false)}>Cancel</button>
+                                    <button
+                                        className="btn btn--success"
+                                        onClick={handleStartNewChat}
+                                        disabled={!newChatTemplate || newChatSending}
+                                    >
+                                        {newChatSending ? 'Sending...' : '\uD83D\uDCAC Send & Start Chat'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query, run, get } from '../database.js';
-import { sendTextMessage, sendMediaMessage, normalizePhone } from '../services/whatsapp.js';
+import { sendTextMessage, sendMediaMessage, sendTemplateMessage, normalizePhone } from '../services/whatsapp.js';
 import { checkWhatsAppEnabled } from '../middleware/limits.js';
 
 const router = Router();
@@ -13,6 +13,75 @@ router.use((req, res, next) => {
     next();
 });
 router.use(checkWhatsAppEnabled);
+
+/**
+ * POST /api/v1/whatsapp/chat/conversations/new
+ * Start a new conversation by sending a template to a phone number
+ */
+router.post('/conversations/new', async (req, res) => {
+    try {
+        const { phone, contactName, templateName, templateParams = [], languageCode = 'en_US' } = req.body;
+        if (!phone || !templateName) {
+            return res.status(400).json({ error: 'Phone number and template name are required' });
+        }
+
+        const normalized = normalizePhone(phone);
+        if (!normalized) {
+            return res.status(400).json({ error: 'Invalid phone number' });
+        }
+
+        // Check if conversation already exists for this phone
+        let conversation = await get(
+            'SELECT * FROM whatsapp_conversations WHERE phone = ? AND tenant_id = ?',
+            [normalized, req.tenantId]
+        );
+
+        if (!conversation) {
+            // Try to find matching contact
+            const contact = await get(
+                'SELECT id, name FROM contacts WHERE phone LIKE ? AND tenant_id = ?',
+                [`%${normalized.slice(-10)}%`, req.tenantId]
+            );
+
+            // Create new conversation
+            await run(
+                `INSERT INTO whatsapp_conversations (tenant_id, phone, contact_name, contact_id, last_message_text, last_message_at, window_expires_at)
+                 VALUES (?, ?, ?, ?, ?, NOW(), NULL)`,
+                [req.tenantId, normalized, contactName || contact?.name || normalized, contact?.id || null, `[Template: ${templateName}]`]
+            );
+
+            conversation = await get(
+                'SELECT * FROM whatsapp_conversations WHERE phone = ? AND tenant_id = ?',
+                [normalized, req.tenantId]
+            );
+        }
+
+        // Send template via Meta API
+        const result = await sendTemplateMessage(
+            normalized, templateName, templateParams,
+            contactName || conversation.contact_name || 'Customer',
+            languageCode, req.tenant
+        );
+
+        // Store outbound message
+        await run(
+            `INSERT INTO whatsapp_chat_messages (tenant_id, conversation_id, direction, message_type, body, provider_message_id, status, sent_by)
+             VALUES (?, ?, 'outbound', 'template', ?, ?, 'sent', ?)`,
+            [req.tenantId, conversation.id, `[Template: ${templateName}]`, result.messageId, req.user.userId]
+        );
+
+        // Update conversation last message
+        await run(
+            `UPDATE whatsapp_conversations SET last_message_text = ?, last_message_at = NOW() WHERE id = ?`,
+            [`[Template: ${templateName}]`, conversation.id]
+        );
+
+        res.json({ success: true, conversationId: conversation.id, messageId: result.messageId });
+    } catch (error) {
+        console.error('Start new conversation error:', error);
+        res.status(500).json({ error: error.message || 'Failed to start conversation' });
+    }
+});
 
 /**
  * GET /api/v1/whatsapp/chat/conversations

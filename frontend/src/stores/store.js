@@ -368,6 +368,15 @@ export const useStore = create(
                 await api(`/whatsapp/chat/conversations/${conversationId}/archive`, { method: 'PATCH' });
                 get().fetchConversations();
             },
+
+            startNewConversation: async (phone, contactName, templateName, templateParams = [], languageCode = 'en_US') => {
+                const result = await api('/whatsapp/chat/conversations/new', {
+                    method: 'POST',
+                    body: JSON.stringify({ phone, contactName, templateName, templateParams, languageCode }),
+                });
+                await get().fetchConversations();
+                return result;
+            },
         }),
         {
             name: 'whatsapp-platform-storage',
