@@ -4,16 +4,20 @@ All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronolog
 
 ---
 
-## 2026-04-17 — Fix: Show Actual Template Body Text in Chat Inbox
-**What**: Template messages in Chat Inbox now show real message content instead of `[Template: name]`
-**Why**: Users couldn't see what was actually sent — chat bubbles just showed `[Template: n1]` or `[Template: hello_world]`
-**Files Changed**: `backend/src/routes/whatsapp-chat.js`, `backend/src/services/whatsapp.js`
-**Commit**: `a22a927`
-- Exported `getTemplateDefinition()` from WhatsApp service
-- Added `resolveTemplateBody()` helper that fetches template from Meta API, extracts BODY text, fills in `{{1}}`, `{{2}}` variables
-- Both `/conversations/new` and `/conversations/:id/send-template` routes now store rendered body text
-- Conversation sidebar preview also shows real text instead of template name
-- Falls back to `[Template: name]` only if template definition fetch fails
+## 2026-04-17 — Feature: Rich Template Cards in Chat Inbox
+**What**: Template messages now display as full WhatsApp-style cards with header image, body, footer, and buttons
+**Why**: Previously showed only `[Template: n1]` or plain body text — users couldn't see the complete message sent to customers
+**Files Changed**: `backend/src/routes/whatsapp-chat.js`, `backend/src/services/whatsapp.js`, `frontend/src/components/WhatsAppChat.jsx`
+**Commit**: `9a584bc`
+- Backend `resolveTemplateBody()` now stores rich JSON with all template components (header, body, footer, buttons)
+- `getTemplatePlainText()` extracts plain text for sidebar conversation preview
+- Frontend `TemplateCard` component renders WhatsApp-style cards with:
+  - Header images (IMAGE), video placeholders, document icons, text headers
+  - Body text with variables filled in
+  - Footer text
+  - Styled buttons (phone, URL, quick reply) with icons
+- Backward compatible: old `[Template: name]` format messages still render as before
+- Only new messages after deploy get the rich card format
 
 ---
 

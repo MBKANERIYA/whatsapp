@@ -65,11 +65,15 @@ app.post('/api/v1/whatsapp-webhook', async (req, res) => {
     try {
         const body = req.body;
 
+        console.log(`[Webhook] Received event: object=${body.object}`);
+
         if (body.object === "whatsapp_business_account") {
             for (const entry of (body.entry || [])) {
                 for (const change of (entry.changes || [])) {
                     const value = change.value;
                     const phoneNumberId = value?.metadata?.phone_number_id;
+
+                    console.log(`[Webhook] Change field=${change.field}, phone_id=${phoneNumberId}, has_messages=${!!value?.messages}, has_statuses=${!!value?.statuses}`);
 
                     // ---- DELIVERY STATUS UPDATES ----
                     if (value?.statuses) {
