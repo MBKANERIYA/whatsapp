@@ -1,9 +1,34 @@
 import { Router } from 'express';
 import { query, run, get } from '../database.js';
-import { sendTextMessage, sendMediaMessage, sendTemplateMessage, normalizePhone } from '../services/whatsapp.js';
+import { sendTextMessage, sendMediaMessage, sendTemplateMessage, normalizePhone, getTemplateDefinition } from '../services/whatsapp.js';
 import { checkWhatsAppEnabled } from '../middleware/limits.js';
 
 const router = Router();
+
+/**
+ * Resolve template body text with variables filled in
+ */
+async function resolveTemplateBody(templateName, templateParams = [], tenant) {
+    try {
+        const tpl = await getTemplateDefinition(templateName, tenant);
+        if (!tpl) return `[Template: ${templateName}]`;
+
+        const bodyComp = (tpl.components || []).find(c => c.type === 'BODY');
+        if (!bodyComp?.text) return `[Template: ${templateName}]`;
+
+        let bodyText = bodyComp.text;
+        // Replace {{1}}, {{2}}, etc. with actual params
+        bodyText = bodyText.replace(/\{\{(\d+)\}\}/g, (_, idx) => {
+            const paramIdx = parseInt(idx) - 1;
+            return templateParams[paramIdx] || `{{${idx}}}`;
+        });
+
+        return bodyText;
+    } catch (err) {
+        console.error('resolveTemplateBody error:', err.message);
+        return `[Template: ${templateName}]`;
+    }
+}
 
 // Admin-only + WhatsApp enabled
 router.use((req, res, next) => {
@@ -44,10 +69,13 @@ router.post('/conversations/new', async (req, res) => {
             );
 
             // Create new conversation
+            // Resolve template body for initial conversation preview
+            const initialBody = await resolveTemplateBody(templateName, templateParams, req.tenant);
+
             await run(
                 `INSERT INTO whatsapp_conversations (tenant_id, phone, contact_name, contact_id, last_message_text, last_message_at, window_expires_at)
                  VALUES (?, ?, ?, ?, ?, NOW(), NULL)`,
-                [req.tenantId, normalized, contactName || contact?.name || normalized, contact?.id || null, `[Template: ${templateName}]`]
+                [req.tenantId, normalized, contactName || contact?.name || normalized, contact?.id || null, initialBody.substring(0, 100)]
             );
 
             conversation = await get(
@@ -56,6 +84,9 @@ router.post('/conversations/new', async (req, res) => {
             );
         }
 
+        // Resolve actual template body text
+        const resolvedBody = await resolveTemplateBody(templateName, templateParams, req.tenant);
+
         // Send template via Meta API
         const result = await sendTemplateMessage(
             normalized, templateName, templateParams,
@@ -63,17 +94,17 @@ router.post('/conversations/new', async (req, res) => {
             languageCode, req.tenant
         );
 
-        // Store outbound message
+        // Store outbound message with actual template content
         await run(
             `INSERT INTO whatsapp_chat_messages (tenant_id, conversation_id, direction, message_type, body, provider_message_id, status, sent_by)
              VALUES (?, ?, 'outbound', 'template', ?, ?, 'sent', ?)`,
-            [req.tenantId, conversation.id, `[Template: ${templateName}]`, result.messageId, req.user.userId]
+            [req.tenantId, conversation.id, resolvedBody, result.messageId, req.user.userId]
         );
 
         // Update conversation last message
         await run(
             `UPDATE whatsapp_conversations SET last_message_text = ?, last_message_at = NOW() WHERE id = ?`,
-            [`[Template: ${templateName}]`, conversation.id]
+            [resolvedBody.substring(0, 100), conversation.id]
         );
 
         res.json({ success: true, conversationId: conversation.id, messageId: result.messageId });
@@ -250,6 +281,9 @@ router.post('/conversations/:id/send-template', async (req, res) => {
         // Import sendTemplateMessage
         const { sendTemplateMessage } = await import('../services/whatsapp.js');
 
+        // Resolve actual template body text
+        const resolvedBody = await resolveTemplateBody(templateName, templateParams, req.tenant);
+
         const result = await sendTemplateMessage(
             conversation.phone, templateName, templateParams,
             conversation.contact_name || 'Customer', languageCode, req.tenant
@@ -260,12 +294,12 @@ router.post('/conversations/:id/send-template', async (req, res) => {
         await run(
             `INSERT INTO whatsapp_chat_messages (tenant_id, conversation_id, direction, message_type, body, provider_message_id, status, sent_by)
              VALUES (?, ?, 'outbound', 'template', ?, ?, 'sent', ?)`,
-            [req.tenantId, conversation.id, `[Template: ${templateName}]`, result.messageId, req.user.userId]
+            [req.tenantId, conversation.id, resolvedBody, result.messageId, req.user.userId]
         );
 
         await run(
             `UPDATE whatsapp_conversations SET last_message_text = ?, last_message_at = ? WHERE id = ?`,
-            [`[Template: ${templateName}]`, now, conversation.id]
+            [resolvedBody.substring(0, 100), now, conversation.id]
         );
 
         res.json({ success: true, messageId: result.messageId });
@@ -314,3 +348,8 @@ router.patch('/conversations/:id/archive', async (req, res) => {
 });
 
 export default router;
+
+
+
+
+//https://crm-api.mahalaxmi.associates/api/v1/whatsapp-webhook

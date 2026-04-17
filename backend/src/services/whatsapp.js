@@ -72,7 +72,7 @@ async function processAndCacheMediaId(imageUrl, tenant) {
     }
 }
 
-async function getTemplateDefinition(templateName, tenant) {
+export async function getTemplateDefinition(templateName, tenant) {
     const cacheKey = tenantCacheKey(tenant, templateName);
     const cached = templateDefCache.get(cacheKey);
     if (cached && Date.now() - cached.fetchedAt < 5 * 60 * 1000) return cached.data;
@@ -417,5 +417,5 @@ export async function deleteTemplate(templateName, tenant) {
 export default {
     normalizePhone, sendTemplateMessage, sendTextMessage, sendMediaMessage,
     getMediaUrl, sendBulkMessages, uploadMediaForTemplate, createTemplate,
-    fetchTemplates, deleteTemplate,
+    fetchTemplates, deleteTemplate, getTemplateDefinition,
 };
