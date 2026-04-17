@@ -130,6 +130,108 @@ export default function WhatsAppChat() {
     const isWindowOpen = conv?.is_window_open;
     const windowMinutes = conv?.window_remaining_minutes || 0;
 
+    // Parse template body JSON for rich display
+    const parseTemplateBody = (body) => {
+        try {
+            const data = JSON.parse(body);
+            if (data._type === 'template_rich') return data;
+        } catch {}
+        return null;
+    };
+
+    // Rich template card renderer
+    const TemplateCard = ({ data, time, status, direction, errorMessage }) => (
+        <div style={{
+            display: 'flex',
+            justifyContent: direction === 'outbound' ? 'flex-end' : 'flex-start',
+            marginBottom: '2px',
+        }}>
+            <div style={{
+                maxWidth: '70%', borderRadius: '8px', overflow: 'hidden',
+                background: direction === 'outbound' ? '#dcf8c6' : '#fff',
+                boxShadow: '0 1px 1px rgba(0,0,0,0.1)',
+                ...(status === 'failed' && { border: '1px solid #ef4444', background: '#fef2f2' }),
+            }}>
+                {/* Header */}
+                {data.header && data.header.format === 'IMAGE' && data.header.url && (
+                    <img src={data.header.url} alt="Template header"
+                        style={{ width: '100%', maxHeight: '180px', objectFit: 'cover', display: 'block' }}
+                        onError={e => { e.target.style.display = 'none'; }}
+                    />
+                )}
+                {data.header && data.header.format === 'VIDEO' && (
+                    <div style={{
+                        background: '#000', height: '120px', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '28px',
+                    }}>
+                        {'\uD83C\uDFA5'}
+                    </div>
+                )}
+                {data.header && data.header.format === 'DOCUMENT' && (
+                    <div style={{
+                        background: '#f0f2f5', padding: '12px', display: 'flex',
+                        alignItems: 'center', gap: '8px', fontSize: '13px', color: '#555',
+                    }}>
+                        {'\uD83D\uDCC4'} Document
+                    </div>
+                )}
+                {data.header && data.header.format === 'TEXT' && data.header.text && (
+                    <div style={{ padding: '8px 12px 0', fontWeight: 700, fontSize: '14px' }}>
+                        {data.header.text}
+                    </div>
+                )}
+
+                {/* Body */}
+                <div style={{ padding: '8px 12px' }}>
+                    <div style={{ fontSize: '10px', opacity: 0.5, marginBottom: '4px', fontStyle: 'italic' }}>Template</div>
+                    <div style={{ fontSize: '14px', lineHeight: '1.4', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+                        {data.body}
+                    </div>
+
+                    {/* Footer */}
+                    {data.footer && (
+                        <div style={{ fontSize: '12px', opacity: 0.5, marginTop: '6px' }}>{data.footer}</div>
+                    )}
+
+                    {/* Timestamp + status */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                        <span style={{ fontSize: '10px', opacity: 0.4 }}>{formatFullTime(time)}</span>
+                        {direction === 'outbound' && (
+                            <span style={{
+                                fontSize: '12px',
+                                color: status === 'read' ? '#53bdeb' : status === 'failed' ? '#ef4444' : '#999',
+                            }}>
+                                {statusIcon(status)}
+                            </span>
+                        )}
+                    </div>
+                    {status === 'failed' && errorMessage && (
+                        <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px' }}>{errorMessage}</div>
+                    )}
+                </div>
+
+                {/* Buttons */}
+                {data.buttons && data.buttons.length > 0 && (
+                    <div style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+                        {data.buttons.map((btn, idx) => (
+                            <div key={idx} style={{
+                                padding: '8px 12px', textAlign: 'center', fontSize: '13px',
+                                fontWeight: 500,
+                                color: btn.type === 'PHONE_NUMBER' ? '#25D366' : btn.type === 'URL' ? '#00a5f4' : '#00a5f4',
+                                borderTop: idx > 0 ? '1px solid rgba(0,0,0,0.06)' : 'none',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                            }}>
+                                {btn.type === 'PHONE_NUMBER' && '\u260E\uFE0F'}
+                                {btn.type === 'URL' && '\uD83D\uDD17'}
+                                {btn.text}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
     const filteredNewChatContacts = (contacts || []).filter(c => {
         if (!newChatSearch) return true;
         const q = newChatSearch.toLowerCase();
@@ -325,7 +427,26 @@ export default function WhatsAppChat() {
 
                             {/* Messages */}
                             <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                {chatMessages.map(msg => (
+                                {chatMessages.map(msg => {
+                                    // Check if this is a rich template message
+                                    if (msg.message_type === 'template') {
+                                        const tplData = parseTemplateBody(msg.body);
+                                        if (tplData) {
+                                            return (
+                                                <TemplateCard
+                                                    key={msg.id}
+                                                    data={tplData}
+                                                    time={msg.created_at}
+                                                    status={msg.status}
+                                                    direction={msg.direction}
+                                                    errorMessage={msg.error_message}
+                                                />
+                                            );
+                                        }
+                                    }
+
+                                    // Default rendering for text, media, and old-format template messages
+                                    return (
                                     <div key={msg.id} style={{
                                         display: 'flex',
                                         justifyContent: msg.direction === 'outbound' ? 'flex-end' : 'flex-start',
@@ -371,7 +492,8 @@ export default function WhatsAppChat() {
                                             )}
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                                 <div ref={messagesEndRef} />
                             </div>
 

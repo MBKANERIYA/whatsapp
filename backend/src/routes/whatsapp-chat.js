@@ -6,28 +6,75 @@ import { checkWhatsAppEnabled } from '../middleware/limits.js';
 const router = Router();
 
 /**
- * Resolve template body text with variables filled in
+ * Resolve full template content as JSON string for rich display
+ * Returns JSON with all components: header, body, footer, buttons
  */
 async function resolveTemplateBody(templateName, templateParams = [], tenant) {
     try {
         const tpl = await getTemplateDefinition(templateName, tenant);
         if (!tpl) return `[Template: ${templateName}]`;
 
-        const bodyComp = (tpl.components || []).find(c => c.type === 'BODY');
-        if (!bodyComp?.text) return `[Template: ${templateName}]`;
+        const components = tpl.components || [];
+        const bodyComp = components.find(c => c.type === 'BODY');
+        const headerComp = components.find(c => c.type === 'HEADER');
+        const footerComp = components.find(c => c.type === 'FOOTER');
+        const buttonsComp = components.find(c => c.type === 'BUTTONS');
 
-        let bodyText = bodyComp.text;
-        // Replace {{1}}, {{2}}, etc. with actual params
+        // Resolve body text with variables
+        let bodyText = bodyComp?.text || '';
         bodyText = bodyText.replace(/\{\{(\d+)\}\}/g, (_, idx) => {
             const paramIdx = parseInt(idx) - 1;
             return templateParams[paramIdx] || `{{${idx}}}`;
         });
 
-        return bodyText;
+        // Build rich template data
+        const templateData = {
+            _type: 'template_rich',
+            template_name: templateName,
+            body: bodyText,
+        };
+
+        // Header
+        if (headerComp) {
+            templateData.header = { format: headerComp.format };
+            if (headerComp.format === 'TEXT') {
+                templateData.header.text = headerComp.text || '';
+            } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
+                templateData.header.url = headerComp.example?.header_handle?.[0] || headerComp.example?.header_url?.[0] || '';
+            }
+        }
+
+        // Footer
+        if (footerComp?.text) {
+            templateData.footer = footerComp.text;
+        }
+
+        // Buttons
+        if (buttonsComp?.buttons?.length) {
+            templateData.buttons = buttonsComp.buttons.map(btn => ({
+                type: btn.type,
+                text: btn.text,
+            }));
+        }
+
+        return JSON.stringify(templateData);
     } catch (err) {
         console.error('resolveTemplateBody error:', err.message);
         return `[Template: ${templateName}]`;
     }
+}
+
+/**
+ * Extract plain text summary from template body (for sidebar preview)
+ */
+function getTemplatePlainText(resolvedBody) {
+    try {
+        const data = JSON.parse(resolvedBody);
+        if (data._type === 'template_rich') {
+            return data.body || `[Template: ${data.template_name}]`;
+        }
+    } catch {}
+    return resolvedBody;
 }
 
 // Admin-only + WhatsApp enabled
@@ -75,7 +122,7 @@ router.post('/conversations/new', async (req, res) => {
             await run(
                 `INSERT INTO whatsapp_conversations (tenant_id, phone, contact_name, contact_id, last_message_text, last_message_at, window_expires_at)
                  VALUES (?, ?, ?, ?, ?, NOW(), NULL)`,
-                [req.tenantId, normalized, contactName || contact?.name || normalized, contact?.id || null, initialBody.substring(0, 100)]
+                [req.tenantId, normalized, contactName || contact?.name || normalized, contact?.id || null, getTemplatePlainText(initialBody).substring(0, 100)]
             );
 
             conversation = await get(
@@ -104,7 +151,7 @@ router.post('/conversations/new', async (req, res) => {
         // Update conversation last message
         await run(
             `UPDATE whatsapp_conversations SET last_message_text = ?, last_message_at = NOW() WHERE id = ?`,
-            [resolvedBody.substring(0, 100), conversation.id]
+            [getTemplatePlainText(resolvedBody).substring(0, 100), conversation.id]
         );
 
         res.json({ success: true, conversationId: conversation.id, messageId: result.messageId });
@@ -299,7 +346,7 @@ router.post('/conversations/:id/send-template', async (req, res) => {
 
         await run(
             `UPDATE whatsapp_conversations SET last_message_text = ?, last_message_at = ? WHERE id = ?`,
-            [resolvedBody.substring(0, 100), now, conversation.id]
+            [getTemplatePlainText(resolvedBody).substring(0, 100), now, conversation.id]
         );
 
         res.json({ success: true, messageId: result.messageId });

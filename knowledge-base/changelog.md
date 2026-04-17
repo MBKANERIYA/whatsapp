@@ -4,6 +4,19 @@ All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronolog
 
 ---
 
+## 2026-04-17 — Fix: Show Actual Template Body Text in Chat Inbox
+**What**: Template messages in Chat Inbox now show real message content instead of `[Template: name]`
+**Why**: Users couldn't see what was actually sent — chat bubbles just showed `[Template: n1]` or `[Template: hello_world]`
+**Files Changed**: `backend/src/routes/whatsapp-chat.js`, `backend/src/services/whatsapp.js`
+**Commit**: `a22a927`
+- Exported `getTemplateDefinition()` from WhatsApp service
+- Added `resolveTemplateBody()` helper that fetches template from Meta API, extracts BODY text, fills in `{{1}}`, `{{2}}` variables
+- Both `/conversations/new` and `/conversations/:id/send-template` routes now store rendered body text
+- Conversation sidebar preview also shows real text instead of template name
+- Falls back to `[Template: name]` only if template definition fetch fails
+
+---
+
 ## 2026-04-15 — Fix: Broadcast Messages Not Sending (All Campaigns Failed)
 **What**: Fixed broadcasts showing 0 sent / 0 failed / status "Failed"
 **Why**: `processBroadcast` background function crashed before sending messages; error was hidden from UI
