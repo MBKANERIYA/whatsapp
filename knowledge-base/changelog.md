@@ -4,6 +4,17 @@ All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronolog
 
 ---
 
+## 2026-04-22 — Fix: Message Timestamps Showing in UTC
+**What**: Fixed chat messages and conversation list timestamps showing UTC time instead of local time
+**Why**: Database timestamps are stored in UTC without timezone markers, so the frontend interpreted them as local time before formatting
+**Files Changed**: `frontend/src/components/WhatsAppChat.jsx`
+- Added `parseUTC` helper to append `Z` to timestamp strings from the backend
+- This forces the JavaScript `Date` object to parse it as UTC rather than local time
+- `toLocaleTimeString` and `toLocaleDateString` now correctly convert the UTC time to the user's local timezone (e.g., IST)
+- Applied to both the conversation list timestamps and the individual message timestamps
+
+---
+
 ## 2026-04-22 — Fix: Messages & Replies Not Showing in Chat Inbox
 **What**: Fixed chat inbox not displaying new messages or customer replies
 **Why**: Stale JavaScript closure bug — the polling setInterval captured the initial null value of selectedConvId, so message polling NEVER ran after the initial click
