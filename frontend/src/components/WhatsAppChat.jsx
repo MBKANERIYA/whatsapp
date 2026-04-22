@@ -110,9 +110,13 @@ export default function WhatsAppChat() {
         }
     };
 
+    // Backend stores timestamps in UTC — append 'Z' so JS Date parses as UTC
+    // toLocaleTimeString then auto-converts to user's local timezone
+    const parseUTC = (dateStr) => new Date(dateStr?.replace(' ', 'T') + 'Z');
+
     const formatTime = (dateStr) => {
         if (!dateStr) return '';
-        const d = new Date(dateStr);
+        const d = parseUTC(dateStr);
         const now = new Date();
         const isToday = d.toDateString() === now.toDateString();
         if (isToday) return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -123,7 +127,7 @@ export default function WhatsAppChat() {
 
     const formatFullTime = (dateStr) => {
         if (!dateStr) return '';
-        return new Date(dateStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+        return parseUTC(dateStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
     };
 
     const statusIcon = (status) => {
