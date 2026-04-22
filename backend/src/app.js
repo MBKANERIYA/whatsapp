@@ -256,6 +256,56 @@ async function processIncomingMessage(msg, contacts, phoneNumberId) {
 }
 
 // ============================================================
+// DEBUG — Diagnostic endpoint (public, no auth)
+// Remove in production when not needed
+// ============================================================
+app.get('/api/v1/debug/chat-status', async (req, res) => {
+    try {
+        // 1. Check tenants and their WhatsApp config
+        const tenants = await query(
+            'SELECT id, name, slug, whatsapp_phone_number_id, whatsapp_configured FROM tenants'
+        );
+
+        // 2. Check recent conversations
+        const conversations = await query(
+            `SELECT id, tenant_id, phone, contact_name, last_message_text, last_message_at, window_expires_at, unread_count 
+             FROM whatsapp_conversations ORDER BY last_message_at DESC LIMIT 10`
+        );
+
+        // 3. Check recent chat messages (both inbound and outbound)
+        const messages = await query(
+            `SELECT id, tenant_id, conversation_id, direction, message_type, SUBSTRING(body, 1, 80) as body_preview, status, created_at 
+             FROM whatsapp_chat_messages ORDER BY created_at DESC LIMIT 20`
+        );
+
+        // 4. Count inbound vs outbound
+        const inboundCount = await get('SELECT COUNT(*) as cnt FROM whatsapp_chat_messages WHERE direction = "inbound"');
+        const outboundCount = await get('SELECT COUNT(*) as cnt FROM whatsapp_chat_messages WHERE direction = "outbound"');
+
+        res.json({
+            info: 'Chat Inbox Diagnostic',
+            webhook_url: `${req.protocol}://${req.get('host')}/api/v1/whatsapp-webhook`,
+            verify_token: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'CrmSaasWebhookToken123',
+            tenants: tenants.map(t => ({
+                id: t.id,
+                name: t.name,
+                slug: t.slug,
+                phone_number_id: t.whatsapp_phone_number_id || '❌ NOT SET',
+                configured: t.whatsapp_configured ? '✅' : '❌',
+            })),
+            message_counts: {
+                inbound: inboundCount?.cnt || 0,
+                outbound: outboundCount?.cnt || 0,
+            },
+            recent_conversations: conversations,
+            recent_messages: messages,
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================================
 // PUBLIC ROUTES — No tenant resolution, no auth required
 // Future public endpoints: add to routes/public.js
 // ============================================================
