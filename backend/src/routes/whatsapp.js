@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { query, run, get, getTenantById } from '../database.js';
-import { sendTemplateMessage, sendBulkMessages, normalizePhone, uploadMediaForTemplate, createTemplate, fetchTemplates, deleteTemplate } from '../services/whatsapp.js';
+import { sendTemplateMessage, sendBulkMessages, normalizePhone, uploadMediaForTemplate, createTemplate, editTemplate, fetchTemplates, deleteTemplate } from '../services/whatsapp.js';
 import { checkWhatsAppEnabled } from '../middleware/limits.js';
 
 const router = Router();
@@ -332,6 +332,50 @@ router.post('/templates', async (req, res) => {
         res.json({ success: true, template: result });
     } catch (error) {
         res.status(500).json({ error: error.message || 'Failed to create template' });
+    }
+});
+
+/**
+ * GET /api/v1/whatsapp/templates
+ */
+/**
+ * PUT /api/v1/whatsapp/templates/:id
+ * Edit an existing template (Meta API updates components only)
+ */
+router.put('/templates/:id', async (req, res) => {
+    try {
+        const { bodyText, headerImageHandle, footerText, buttons } = req.body;
+        if (!bodyText) return res.status(400).json({ error: 'Body text is required' });
+
+        const result = await editTemplate(req.params.id, {
+            bodyText,
+            headerImageHandle: headerImageHandle || null,
+            footerText: footerText || null,
+            buttons: buttons || [],
+        }, req.tenant);
+
+        // Update local DB record if exists
+        try {
+            await run(`
+                UPDATE whatsapp_templates
+                SET body_text = ?, footer_text = ?, has_header_image = ?, buttons_json = ?, status = 'PENDING'
+                WHERE meta_template_id = ? AND tenant_id = ?
+            `, [
+                bodyText,
+                footerText || null,
+                headerImageHandle ? 1 : 0,
+                JSON.stringify(buttons || []),
+                req.params.id,
+                req.tenantId,
+            ]);
+        } catch (dbErr) {
+            console.error('Failed to update template in local DB:', dbErr.message);
+        }
+
+        res.json({ success: true, template: result });
+    } catch (error) {
+        console.error('Template edit error:', error);
+        res.status(500).json({ error: error.message || 'Failed to edit template' });
     }
 });
 

@@ -4,6 +4,23 @@ All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronolog
 
 ---
 
+## 2026-04-27 — Feature: Template Edit Functionality
+**What**: Added ability to edit existing WhatsApp templates from the Templates tab
+**Why**: Users previously had to delete and recreate templates to make changes — now they can edit body, footer, buttons, and header image directly
+**Files Changed**: `backend/src/services/whatsapp.js`, `backend/src/routes/whatsapp.js`, `frontend/src/stores/store.js`, `frontend/src/components/WhatsAppBroadcast.jsx`
+- Backend: Added `editTemplate()` service function that calls Meta's `POST /{template_id}` API to update template components
+- Backend: Added `PUT /api/v1/whatsapp/templates/:id` route that accepts updated body/footer/buttons/image and forwards to Meta API, also updates local DB record
+- Frontend Store: Added `editWhatsAppTemplate` Zustand action
+- Frontend UI: "Edit" button in template list table opens a full-screen modal with:
+  - Read-only display of name, category, language (Meta doesn't allow changing these)
+  - Editable body text, footer, header image, and button builder
+  - Live WhatsApp-style preview panel (matches the create template preview)
+  - Pre-fills all fields from the existing template's Meta component data
+  - On save, resubmits template to Meta for review and shows success toast
+- Invalidates template definition cache after edit to ensure fresh data
+
+---
+
 ## 2026-04-22 — Fix: Message Timestamps Showing in UTC
 **What**: Fixed chat messages and conversation list timestamps showing UTC time instead of local time
 **Why**: Database timestamps are stored in UTC without timezone markers, so the frontend interpreted them as local time before formatting

@@ -8,7 +8,7 @@ export default function WhatsAppBroadcast() {
         fetchWhatsAppCampaigns, fetchWhatsAppCampaignDetail,
         whatsappRecipients, whatsappCampaigns, showToast,
         uploadTemplateImage, createWhatsAppTemplate, fetchWhatsAppTemplates,
-        deleteWhatsAppTemplate, whatsappTemplates
+        deleteWhatsAppTemplate, editWhatsAppTemplate, whatsappTemplates
     } = useStore();
 
     const [tab, setTab] = useState('broadcast');
@@ -25,6 +25,15 @@ export default function WhatsAppBroadcast() {
     const [tplCreating, setTplCreating] = useState(false);
     const [tplShowList, setTplShowList] = useState(false);
 
+    // Template editing state
+    const [editingTemplate, setEditingTemplate] = useState(null); // the full template object
+    const [editBody, setEditBody] = useState('');
+    const [editFooter, setEditFooter] = useState('');
+    const [editButtons, setEditButtons] = useState([]);
+    const [editImageFile, setEditImageFile] = useState(null);
+    const [editImagePreview, setEditImagePreview] = useState(null);
+    const [editSaving, setEditSaving] = useState(false);
+
     const addButton = (type) => {
         if (tplButtons.length >= 10) return;
         if (type === 'PHONE_NUMBER' && tplButtons.filter(b => b.type === 'PHONE_NUMBER').length >= 1) return;
@@ -36,6 +45,20 @@ export default function WhatsAppBroadcast() {
     };
     const removeButton = (idx) => {
         setTplButtons(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    // Edit button helpers
+    const addEditButton = (type) => {
+        if (editButtons.length >= 10) return;
+        if (type === 'PHONE_NUMBER' && editButtons.filter(b => b.type === 'PHONE_NUMBER').length >= 1) return;
+        if (type === 'URL' && editButtons.filter(b => b.type === 'URL').length >= 2) return;
+        setEditButtons(prev => [...prev, { type, text: '', phone: '', url: '', urlExample: '' }]);
+    };
+    const updateEditButton = (idx, field, value) => {
+        setEditButtons(prev => prev.map((b, i) => i === idx ? { ...b, [field]: value } : b));
+    };
+    const removeEditButton = (idx) => {
+        setEditButtons(prev => prev.filter((_, i) => i !== idx));
     };
 
     // Broadcast state
@@ -163,6 +186,79 @@ export default function WhatsAppBroadcast() {
         }
     };
 
+    const handleEditImageSelect = (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setEditImageFile(file);
+            const reader = new FileReader();
+            reader.onload = (ev) => setEditImagePreview(ev.target.result);
+            reader.readAsDataURL(file);
+        }
+    };
+
+    // Open edit modal — extract component data from Meta template
+    const openEditModal = (tpl) => {
+        const bodyComp = tpl.components?.find(c => c.type === 'BODY');
+        const footerComp = tpl.components?.find(c => c.type === 'FOOTER');
+        const headerComp = tpl.components?.find(c => c.type === 'HEADER');
+        const buttonsComp = tpl.components?.find(c => c.type === 'BUTTONS');
+
+        setEditingTemplate(tpl);
+        setEditBody(bodyComp?.text || '');
+        setEditFooter(footerComp?.text || '');
+        setEditImageFile(null);
+        setEditImagePreview(null);
+
+        // Reconstruct buttons
+        if (buttonsComp?.buttons) {
+            setEditButtons(buttonsComp.buttons.map(btn => ({
+                type: btn.type,
+                text: btn.text || '',
+                phone: btn.phone_number || '',
+                url: btn.url || '',
+                urlExample: btn.example?.[0] || '',
+            })));
+        } else {
+            setEditButtons([]);
+        }
+
+        // If header is an image, show the existing URL as preview
+        if (headerComp?.format === 'IMAGE') {
+            const existingUrl = headerComp.example?.header_handle?.[0] || headerComp.example?.header_url?.[0];
+            if (existingUrl) setEditImagePreview(existingUrl);
+        }
+    };
+
+    const handleEditTemplate = async (e) => {
+        e.preventDefault();
+        if (!editBody.trim()) { showToast('Body text is required', 'error'); return; }
+        setEditSaving(true);
+        try {
+            let headerImageHandle = null;
+            if (editImageFile) {
+                headerImageHandle = await uploadTemplateImage(editImageFile);
+            }
+            const buttons = editButtons.filter(b => b.text?.trim()).map(b => ({
+                type: b.type,
+                text: b.text.trim(),
+                ...(b.type === 'PHONE_NUMBER' && { phone: b.phone }),
+                ...(b.type === 'URL' && { url: b.url, urlExample: b.urlExample }),
+            }));
+            await editWhatsAppTemplate(editingTemplate.id, {
+                bodyText: editBody,
+                headerImageHandle,
+                footerText: editFooter || null,
+                buttons,
+            });
+            showToast('Template updated — resubmitted to Meta for review');
+            setEditingTemplate(null);
+            fetchWhatsAppTemplates();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+        setEditSaving(false);
+    };
+
     const handleCreateTemplate = async (e) => {
         e.preventDefault();
         if (!tplName.trim() || !tplBody.trim()) { showToast('Template name and body are required', 'error'); return; }
@@ -254,6 +350,194 @@ export default function WhatsAppBroadcast() {
                             <button className="btn btn--success" onClick={confirmSend} disabled={isSending}>
                                 {isSending ? 'Sending...' : 'Confirm & Send'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Template Modal */}
+            {editingTemplate && (
+                <div className="modal-backdrop" onClick={() => setEditingTemplate(null)}>
+                    <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '900px', maxHeight: '90vh', overflow: 'auto' }}>
+                        <div className="modal-header">
+                            <h2>Edit Template: {editingTemplate.name}</h2>
+                            <button className="btn-icon" onClick={() => setEditingTemplate(null)}><Icon name="close" size={20} /></button>
+                        </div>
+                        <div style={{ padding: '20px' }}>
+                            <div style={{ fontSize: '13px', opacity: 0.6, marginBottom: '16px' }}>
+                                Editing will resubmit the template to Meta for review. Name, category, and language cannot be changed.
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '24px', alignItems: 'start' }}>
+                                {/* Form */}
+                                <form onSubmit={handleEditTemplate}>
+                                    <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                                        <div style={{ flex: 1, background: 'var(--bg-tertiary)', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.5, textTransform: 'uppercase', marginBottom: '2px' }}>Name</div>
+                                            {editingTemplate.name}
+                                        </div>
+                                        <div style={{ background: 'var(--bg-tertiary)', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.5, textTransform: 'uppercase', marginBottom: '2px' }}>Category</div>
+                                            {editingTemplate.category}
+                                        </div>
+                                        <div style={{ background: 'var(--bg-tertiary)', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.5, textTransform: 'uppercase', marginBottom: '2px' }}>Language</div>
+                                            {editingTemplate.language}
+                                        </div>
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label className="form-label">Header Image (optional — upload new to replace)</label>
+                                        <input type="file" accept="image/*" onChange={handleEditImageSelect} className="form-input" />
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label className="form-label">Body Text * <span style={{ opacity: 0.5 }}>Use {'{{1}}'}, {'{{2}}'} for variables</span></label>
+                                        <textarea className="form-input" value={editBody} onInput={e => setEditBody(e.target.value)} rows={4} required
+                                            placeholder="Hi {{1}}, thank you for your interest!" />
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label className="form-label">Footer (optional)</label>
+                                        <input className="form-input" value={editFooter} onInput={e => setEditFooter(e.target.value)} placeholder="Reply STOP to unsubscribe" maxLength={60} />
+                                    </div>
+
+                                    {/* Buttons Builder */}
+                                    <div className="form-group">
+                                        <label className="form-label">Buttons <span style={{ opacity: 0.5, fontSize: '11px' }}>(optional · max 10)</span></label>
+
+                                        {editButtons.map((btn, idx) => (
+                                            <div key={idx} style={{
+                                                display: 'flex', gap: '8px', alignItems: 'flex-start',
+                                                padding: '10px', background: 'var(--bg-tertiary)',
+                                                borderRadius: '8px', marginBottom: '8px',
+                                            }}>
+                                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                                                        {btn.type === 'PHONE_NUMBER' ? '📞 Call Button' : btn.type === 'URL' ? '🔗 URL Button' : '↩ Quick Reply'}
+                                                    </div>
+                                                    <input className="form-input" value={btn.text}
+                                                        onInput={e => updateEditButton(idx, 'text', e.target.value)}
+                                                        placeholder="Button text (max 25 chars)" maxLength={25}
+                                                        style={{ fontSize: '13px' }} />
+                                                    {btn.type === 'PHONE_NUMBER' && (
+                                                        <input className="form-input" value={btn.phone}
+                                                            onInput={e => updateEditButton(idx, 'phone', e.target.value)}
+                                                            placeholder="+919876543210" style={{ fontSize: '13px' }} />
+                                                    )}
+                                                    {btn.type === 'URL' && (
+                                                        <>
+                                                            <input className="form-input" value={btn.url}
+                                                                onInput={e => updateEditButton(idx, 'url', e.target.value)}
+                                                                placeholder="https://example.com/page/{{1}}" style={{ fontSize: '13px' }} />
+                                                            {btn.url?.includes('{{') && (
+                                                                <input className="form-input" value={btn.urlExample}
+                                                                    onInput={e => updateEditButton(idx, 'urlExample', e.target.value)}
+                                                                    placeholder="Example URL (for Meta review)" style={{ fontSize: '12px' }} />
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                                <button type="button" className="btn-icon" onClick={() => removeEditButton(idx)}
+                                                    style={{ color: '#ef4444', marginTop: '18px' }} title="Remove">
+                                                    <Icon name="close" size={16} />
+                                                </button>
+                                            </div>
+                                        ))}
+
+                                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                            <button type="button" className="btn btn--outline" style={{ fontSize: '12px', padding: '4px 10px' }}
+                                                onClick={() => addEditButton('PHONE_NUMBER')}
+                                                disabled={editButtons.filter(b => b.type === 'PHONE_NUMBER').length >= 1}>
+                                                + Call
+                                            </button>
+                                            <button type="button" className="btn btn--outline" style={{ fontSize: '12px', padding: '4px 10px' }}
+                                                onClick={() => addEditButton('URL')}
+                                                disabled={editButtons.filter(b => b.type === 'URL').length >= 2}>
+                                                + Website
+                                            </button>
+                                            <button type="button" className="btn btn--outline" style={{ fontSize: '12px', padding: '4px 10px' }}
+                                                onClick={() => addEditButton('QUICK_REPLY')}
+                                                disabled={editButtons.length >= 10}>
+                                                + Quick Reply
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                                        <button type="submit" className="btn btn--primary" disabled={editSaving}>
+                                            {editSaving ? 'Saving...' : 'Save & Resubmit'}
+                                        </button>
+                                        <button type="button" className="btn btn--outline" onClick={() => setEditingTemplate(null)}>Cancel</button>
+                                    </div>
+                                </form>
+
+                                {/* Live Preview */}
+                                <div>
+                                    <div style={{
+                                        fontSize: '11px', fontWeight: 600, textTransform: 'uppercase',
+                                        letterSpacing: '0.06em', color: 'var(--text-muted)',
+                                        marginBottom: '8px', paddingLeft: '4px',
+                                    }}>Live Preview</div>
+                                    <div style={{
+                                        background: '#e5ddd5',
+                                        backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'400\' height=\'400\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'p\' width=\'80\' height=\'80\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M0 40h80M40 0v80\' stroke=\'%23d4ccb8\' stroke-width=\'0.5\' fill=\'none\' opacity=\'0.3\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect fill=\'url(%23p)\' width=\'400\' height=\'400\'/%3E%3C/svg%3E")',
+                                        borderRadius: '16px', padding: '24px 16px',
+                                        minHeight: '200px', display: 'flex', flexDirection: 'column',
+                                        justifyContent: 'center', boxShadow: 'var(--shadow-md)',
+                                    }}>
+                                        <div style={{
+                                            background: '#ffffff', borderRadius: '0 8px 8px 8px',
+                                            maxWidth: '300px', overflow: 'hidden',
+                                            boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+                                        }}>
+                                            {editImagePreview && (
+                                                <img src={editImagePreview} style={{
+                                                    width: '100%', height: '160px',
+                                                    objectFit: 'cover', display: 'block',
+                                                }} />
+                                            )}
+                                            <div style={{ padding: '6px 8px 4px' }}>
+                                                <div style={{
+                                                    fontSize: '14px', color: '#111b21',
+                                                    lineHeight: '1.45', whiteSpace: 'pre-wrap',
+                                                    wordBreak: 'break-word',
+                                                }}>
+                                                    {editBody
+                                                        ? editBody.replace(/\{\{(\d+)\}\}/g, (_, n) => `[Variable ${n}]`)
+                                                        : <span style={{ color: '#8696a0', fontStyle: 'italic' }}>Your message body will appear here...</span>
+                                                    }
+                                                </div>
+                                                {editFooter && (
+                                                    <div style={{ fontSize: '12px', color: '#8696a0', marginTop: '4px' }}>{editFooter}</div>
+                                                )}
+                                                <div style={{ fontSize: '11px', color: '#8696a0', textAlign: 'right', marginTop: '2px' }}>
+                                                    {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                                </div>
+                                            </div>
+                                            {editButtons.filter(b => b.text?.trim()).map((btn, idx) => (
+                                                <div key={idx} style={{
+                                                    borderTop: '1px solid #e9ecef',
+                                                    padding: '10px 8px', textAlign: 'center',
+                                                    display: 'flex', alignItems: 'center',
+                                                    justifyContent: 'center', gap: '6px',
+                                                }}>
+                                                    {btn.type === 'PHONE_NUMBER' && (
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#25D366" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                                    )}
+                                                    {btn.type === 'URL' && (
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00a5f4" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+                                                    )}
+                                                    {btn.type === 'QUICK_REPLY' && (
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00a5f4" strokeWidth="2"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></svg>
+                                                    )}
+                                                    <span style={{ fontSize: '14px', color: btn.type === 'PHONE_NUMBER' ? '#25D366' : '#00a5f4', fontWeight: 500 }}>{btn.text}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -900,10 +1184,16 @@ export default function WhatsAppBroadcast() {
                                             </span>
                                         </td>
                                         <td>
-                                            <button className="btn btn--outline" style={{ fontSize: '12px', padding: '4px 10px', color: '#ef4444' }}
-                                                onClick={() => { if (confirm(`Delete template "${t.name}"?`)) deleteWhatsAppTemplate(t.name); }}>
-                                                Delete
-                                            </button>
+                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                                <button className="btn btn--outline" style={{ fontSize: '12px', padding: '4px 10px' }}
+                                                    onClick={() => openEditModal(t)}>
+                                                    Edit
+                                                </button>
+                                                <button className="btn btn--outline" style={{ fontSize: '12px', padding: '4px 10px', color: '#ef4444' }}
+                                                    onClick={() => { if (confirm(`Delete template "${t.name}"?`)) deleteWhatsAppTemplate(t.name); }}>
+                                                    Delete
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

@@ -398,6 +398,81 @@ export async function fetchTemplates(tenant) {
 }
 
 /**
+ * Edit an existing WhatsApp template (Meta API: POST /{template_id})
+ * Only components can be edited — name, category, language cannot change.
+ */
+export async function editTemplate(templateId, { bodyText, headerImageHandle, footerText, buttons = [] }, tenant) {
+    const { token, wabaId } = getCredentials(tenant);
+    if (!wabaId) throw new Error('WhatsApp Business Account ID not configured.');
+
+    const components = [];
+
+    if (headerImageHandle) {
+        components.push({ type: 'HEADER', format: 'IMAGE', example: { header_handle: [headerImageHandle] } });
+    }
+
+    const bodyComponent = { type: 'BODY', text: bodyText };
+    const variableMatches = bodyText.match(/\{\{(\d+)\}\}/g);
+    if (variableMatches && variableMatches.length > 0) {
+        bodyComponent.example = { body_text: [variableMatches.map((_, i) => `Sample ${i + 1}`)] };
+    }
+    components.push(bodyComponent);
+
+    if (footerText?.trim()) components.push({ type: 'FOOTER', text: footerText.trim() });
+
+    // Build buttons component (supports PHONE_NUMBER, URL, QUICK_REPLY)
+    const validButtons = (buttons || []).filter(b => b && b.type);
+    if (validButtons.length > 0) {
+        const metaButtons = validButtons.map(btn => {
+            if (btn.type === 'PHONE_NUMBER' && btn.text && btn.phone) {
+                return {
+                    type: 'PHONE_NUMBER',
+                    text: btn.text.substring(0, 25),
+                    phone_number: btn.phone.startsWith('+') ? btn.phone : `+${btn.phone}`,
+                };
+            }
+            if (btn.type === 'URL' && btn.text && btn.url) {
+                const urlBtn = {
+                    type: 'URL',
+                    text: btn.text.substring(0, 25),
+                    url: btn.url,
+                };
+                if (btn.url.includes('{{1}}')) {
+                    urlBtn.example = [btn.urlExample || 'https://example.com'];
+                }
+                return urlBtn;
+            }
+            if (btn.type === 'QUICK_REPLY' && btn.text) {
+                return { type: 'QUICK_REPLY', text: btn.text.substring(0, 25) };
+            }
+            return null;
+        }).filter(Boolean);
+
+        if (metaButtons.length > 0) {
+            components.push({ type: 'BUTTONS', buttons: metaButtons });
+        }
+    }
+
+    const payload = { components };
+
+    const response = await fetch(`${WHATSAPP_API_URL}/${templateId}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || `Failed to edit template (${response.status})`);
+
+    // Invalidate template cache for this tenant
+    for (const [key] of templateDefCache) {
+        if (key.startsWith(`${tenant.id}:`)) templateDefCache.delete(key);
+    }
+
+    return { success: true, ...data };
+}
+
+/**
  * Delete a template from Meta
  */
 export async function deleteTemplate(templateName, tenant) {
@@ -417,5 +492,5 @@ export async function deleteTemplate(templateName, tenant) {
 export default {
     normalizePhone, sendTemplateMessage, sendTextMessage, sendMediaMessage,
     getMediaUrl, sendBulkMessages, uploadMediaForTemplate, createTemplate,
-    fetchTemplates, deleteTemplate, getTemplateDefinition,
+    editTemplate, fetchTemplates, deleteTemplate, getTemplateDefinition,
 };

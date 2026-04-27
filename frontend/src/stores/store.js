@@ -291,6 +291,15 @@ export const useStore = create(
                 get().fetchWhatsAppTemplates();
             },
 
+            editWhatsAppTemplate: async (templateId, templateData) => {
+                const result = await api(`/whatsapp/templates/${encodeURIComponent(templateId)}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(templateData),
+                });
+                get().fetchWhatsAppTemplates();
+                return result;
+            },
+
             // ============================================================
             // WHATSAPP CHAT INBOX
             // ============================================================

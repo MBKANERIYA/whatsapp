@@ -225,6 +225,7 @@ CREATE TABLE whatsapp_messages (
 | GET | `/recipients` | Get filtered contacts for broadcast (tag, search, location, min_ticket, max_ticket) |
 | GET | `/templates` | List Meta-approved templates |
 | POST | `/templates` | Create & submit template to Meta |
+| PUT | `/templates/:id` | Edit template components (body, footer, buttons, image) |
 | DELETE | `/templates/:name` | Delete template from Meta |
 | POST | `/broadcast` | Send broadcast to recipients |
 | GET | `/campaigns` | List past campaigns |
