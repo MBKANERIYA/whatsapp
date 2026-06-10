@@ -26,6 +26,15 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
+// Vercel normalizer: Vercel's routePrefix="/api" strips "/api" from the path.
+// This middleware re-adds it so our route definitions continue to match.
+app.use((req, res, next) => {
+    if (req.url.startsWith('/v1/')) {
+        req.url = '/api' + req.url;
+    }
+    next();
+});
+
 app.use(cors({
     origin: config.corsOrigins,
     credentials: true,

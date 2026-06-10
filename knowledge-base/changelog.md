@@ -4,6 +4,15 @@ All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronolog
 
 ---
 
+## 2026-06-10 — Fixed Vercel Route Prefix Stripping
+**What**: Added middleware to `app.js` to normalize `req.url` for Vercel deployments.
+**Why**: Vercel's `routePrefix: "/api"` automatically strips `/api` from the request URL before sending it to the backend. This caused the Express router to miss the `/api/v1/...` definitions and fall through to the static HTML fallback, resulting in `Unexpected token '<'` on the frontend.
+**Files Changed**: `backend/src/app.js`
+**Commit**: N/A
+- Added middleware to re-prepend `/api` to URLs starting with `/v1/`
+
+---
+
 ## 2026-06-10 — Fixed Vercel Backend Entrypoint
 **What**: Updated Vercel backend `entrypoint` to `backend/src/app.js`.
 **Why**: Vercel `@vercel/node` requires the entrypoint to export the Express app for Serverless Functions. Using `backend` as the entrypoint caused build errors, and `server.js` didn't export the app.
