@@ -4,12 +4,22 @@ All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronolog
 
 ---
 
-## 2026-06-10 — Added Vercel Deployment Configuration
-**What**: Added `vercel.json` with `experimentalServices` config.
-**Why**: To support monorepo deployment of both frontend (Vite) and backend on Vercel under a single project domain.
+## 2026-06-10 — Fixed Vercel Backend Route Prefix
+**What**: Changed Vercel backend `routePrefix` to `/api`.
+**Why**: The frontend requests were failing with "Unexpected end of JSON input" because they were hitting `/api/v1/...` while Vercel was routing the backend on `/_/backend`. This caused Vercel to send the API request to the Vite frontend fallback instead of the backend.
 **Files Changed**: `vercel.json`
 **Commit**: N/A
-- Configured frontend routing to `/` and backend to `/_/backend`
+- Changed backend `routePrefix` from `/_/backend` to `/api`
+
+---
+
+## 2026-06-10 — Fixed Vercel Deployment Configuration
+**What**: Fixed Vercel build error by renaming `root` to `entrypoint` in `vercel.json`.
+**Why**: Vercel threw `Service "backend" must specify "framework", "entrypoint"...` because the experimental services config requires the `entrypoint` key rather than `root`.
+**Files Changed**: `vercel.json`
+**Commit**: N/A
+- Changed `"root": "frontend"` to `"entrypoint": "frontend"`
+- Changed `"root": "backend"` to `"entrypoint": "backend"`
 
 ---
 
