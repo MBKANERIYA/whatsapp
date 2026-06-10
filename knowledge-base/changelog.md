@@ -4,6 +4,25 @@ All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronolog
 
 ---
 
+## 2026-06-10 — Added Vercel Deployment Configuration
+**What**: Added `vercel.json` with `experimentalServices` config.
+**Why**: To support monorepo deployment of both frontend (Vite) and backend on Vercel under a single project domain.
+**Files Changed**: `vercel.json`
+**Commit**: N/A
+- Configured frontend routing to `/` and backend to `/_/backend`
+
+---
+
+## 2026-06-10 — Changed GitHub Remote Repository
+**What**: Updated the project's Git remote `origin` to a new GitHub repository URL.
+**Why**: User requested to push the codebase to a new central repository.
+**Files Changed**: None (Git configuration updated)
+**Commit**: N/A
+- Changed remote `origin` from `shivanshu407/whatsapp-broadcast-saas` to `MBKANERIYA/whatsapp`
+- Pushed the `main` branch to the new remote repository
+
+---
+
 ## 2026-04-27 — Feature: Template Edit Functionality
 **What**: Added ability to edit existing WhatsApp templates from the Templates tab
 **Why**: Users previously had to delete and recreate templates to make changes — now they can edit body, footer, buttons, and header image directly
