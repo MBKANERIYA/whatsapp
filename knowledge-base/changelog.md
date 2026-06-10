@@ -4,6 +4,15 @@ All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronolog
 
 ---
 
+## 2026-06-10 — Fixed Vercel Backend Entrypoint
+**What**: Updated Vercel backend `entrypoint` to `backend/src/app.js`.
+**Why**: Vercel `@vercel/node` requires the entrypoint to export the Express app for Serverless Functions. Using `backend` as the entrypoint caused build errors, and `server.js` didn't export the app.
+**Files Changed**: `vercel.json`
+**Commit**: N/A
+- Changed backend `entrypoint` to `backend/src/app.js`
+
+---
+
 ## 2026-06-10 — Fixed Vercel Backend Route Prefix
 **What**: Changed Vercel backend `routePrefix` to `/api`.
 **Why**: The frontend requests were failing with "Unexpected end of JSON input" because they were hitting `/api/v1/...` while Vercel was routing the backend on `/_/backend`. This caused Vercel to send the API request to the Vite frontend fallback instead of the backend.
