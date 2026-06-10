@@ -4,6 +4,16 @@ All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronolog
 
 ---
 
+## 2026-06-10 — Fixed Dockerfile Build Error
+**What**: Replaced `npm ci` with `npm install` in the Dockerfile.
+**Why**: The build failed on Cloud Run / Render due to a `package-lock.json` sync error (`Missing: react@19.2.7 from lock file`). This happens because Zustand has a peer dependency on React, but the project uses Preact. `npm ci` is strict and crashes, while `npm install` resolves it gracefully.
+**Files Changed**: `Dockerfile`
+**Commit**: N/A
+- Changed frontend build command to `npm install`
+- Changed backend build command to `npm install --production`
+
+---
+
 ## 2026-06-10 — Fixed Vercel Route Prefix Stripping
 **What**: Added middleware to `app.js` to normalize `req.url` for Vercel deployments.
 **Why**: Vercel's `routePrefix: "/api"` automatically strips `/api` from the request URL before sending it to the backend. This caused the Express router to miss the `/api/v1/...` definitions and fall through to the static HTML fallback, resulting in `Unexpected token '<'` on the frontend.
