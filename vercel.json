@@ -1,13 +1,14 @@
 {
-    "experimentalServices": {
-        "frontend": {
-            "entrypoint": "frontend",
-            "routePrefix": "/",
-            "framework": "vite"
+    "buildCommand": "cd frontend && npm install && npm run build",
+    "outputDirectory": "frontend/dist",
+    "rewrites": [
+        {
+            "source": "/api/(.*)",
+            "destination": "https://broadcast.innodify.in/api/$1"
         },
-        "backend": {
-            "entrypoint": "backend/src/app.js",
-            "routePrefix": "/api"
+        {
+            "source": "/webhook/(.*)",
+            "destination": "https://broadcast.innodify.in/webhook/$1"
         }
-    }
+    ]
 }
