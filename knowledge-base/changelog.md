@@ -2,6 +2,16 @@
 
 All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronological order.
 
+## 2026-06-11 — Fix: Revert Vercel API Proxy
+**What**: Restored the original Vercel backend deployment block (`experimentalServices.backend`) and removed the API proxy rewrites.
+**Why**: The `broadcast.innodify.in` VPS was unresponsive/inactive, causing the proxy to hang and Vercel to return a 502/500 plain text error (breaking the frontend JSON parser). The backend will now be correctly deployed to Vercel Serverless Functions again, where it can connect to the Railway MySQL database using the `MYSQL_URL` environment variable.
+**Files Changed**: `vercel.json`
+**Commit**: N/A
+- Removed `rewrites` to `https://broadcast.innodify.in`.
+- Restored `experimentalServices.backend`.
+
+---
+
 ## 2026-06-11 — Feature: Vercel Proxy to Hostinger API
 **What**: Restructured `vercel.json` to act exclusively as a frontend host and proxy API requests to Hostinger.
 **Why**: Vercel was previously configured to deploy the Express backend via Serverless Functions, which could not connect to the Hostinger database (`localhost` bind restrictions). By using Vercel's `rewrites` to proxy `/api/*` and `/webhook/*` directly to `https://broadcast.innodify.in`, we avoid all CORS issues, maintain security, and keep the database isolated on the VPS.

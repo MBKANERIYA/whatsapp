@@ -4,16 +4,10 @@
             "entrypoint": "frontend",
             "routePrefix": "/",
             "framework": "vite"
-        }
-    },
-    "rewrites": [
-        {
-            "source": "/api/(.*)",
-            "destination": "https://broadcast.innodify.in/api/$1"
         },
-        {
-            "source": "/webhook/(.*)",
-            "destination": "https://broadcast.innodify.in/webhook/$1"
+        "backend": {
+            "entrypoint": "backend/src/app.js",
+            "routePrefix": "/api"
         }
-    ]
+    }
 }
