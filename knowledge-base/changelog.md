@@ -2,6 +2,16 @@
 
 All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronological order.
 
+## 2026-06-11 — Feature: Vercel Proxy to Hostinger API
+**What**: Restructured `vercel.json` to act exclusively as a frontend host and proxy API requests to Hostinger.
+**Why**: Vercel was previously configured to deploy the Express backend via Serverless Functions, which could not connect to the Hostinger database (`localhost` bind restrictions). By using Vercel's `rewrites` to proxy `/api/*` and `/webhook/*` directly to `https://broadcast.innodify.in`, we avoid all CORS issues, maintain security, and keep the database isolated on the VPS.
+**Files Changed**: `vercel.json`
+**Commit**: N/A
+- Replaced `experimentalServices` with standard Vite build configuration (`buildCommand` & `outputDirectory`).
+- Added proxy rewrites routing `/api` and `/webhook` traffic to the VPS.
+
+---
+
 ## 2026-06-11 — Fix: Vercel Backend Database Connection and 500 Errors
 **What**: Added `MYSQL_URL` parsing in configuration and robust `bcrypt` exports mapping.
 **Why**: Vercel deployments were failing with a 500 error on signup because the Vercel-hosted backend couldn't connect to the MySQL database without `MYSQL_URL`/`DATABASE_URL` parsing. Additionally, `bcryptjs` CommonJS module resolution on Vercel could sometimes cause undefined `hashSync` errors. Finally, added exact error details to the 500 response JSON for easier future debugging on Vercel.
