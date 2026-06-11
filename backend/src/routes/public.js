@@ -59,7 +59,8 @@ router.post('/signup', async (req, res) => {
         const tenantId = tenantResult.lastInsertRowid;
 
         // Create admin user
-        const passwordHash = bcrypt.hashSync(password, 10);
+        const hashSync = bcrypt.hashSync || bcrypt.default?.hashSync;
+        const passwordHash = hashSync(password, 10);
         const userResult = await run(
             'INSERT INTO users (tenant_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
             [tenantId, name, email, passwordHash, 'admin']
@@ -81,7 +82,7 @@ router.post('/signup', async (req, res) => {
         });
     } catch (error) {
         console.error('[SIGNUP ERROR]', error.message, error.stack);
-        res.status(500).json({ error: 'Signup failed. Please try again.' });
+        res.status(500).json({ error: 'Signup failed. Please try again.', details: error.message });
     }
 });
 

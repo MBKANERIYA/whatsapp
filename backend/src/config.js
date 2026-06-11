@@ -26,13 +26,31 @@ export default {
     nodeEnv: process.env.NODE_ENV || 'development',
 
     // MySQL Database
-    db: {
-        host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT) || 3306,
-        user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || 'whatsapp_saas',
-    },
+    db: (() => {
+        // Parse MYSQL_URL or DATABASE_URL if provided (Railway/Vercel typical)
+        const dbUrl = process.env.MYSQL_URL || process.env.DATABASE_URL;
+        if (dbUrl) {
+            try {
+                const url = new URL(dbUrl);
+                return {
+                    host: url.hostname,
+                    port: parseInt(url.port) || 3306,
+                    user: url.username,
+                    password: url.password,
+                    database: url.pathname.slice(1),
+                };
+            } catch (e) {
+                console.error('[CONFIG] Failed to parse DB URL:', e.message);
+            }
+        }
+        return {
+            host: process.env.DB_HOST || 'localhost',
+            port: parseInt(process.env.DB_PORT) || 3306,
+            user: process.env.DB_USER || 'root',
+            password: process.env.DB_PASSWORD || '',
+            database: process.env.DB_NAME || 'whatsapp_saas',
+        };
+    })(),
 
     // JWT
     jwtSecret: (() => {

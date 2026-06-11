@@ -2,6 +2,15 @@
 
 All notable changes to the WhatsApp Broadcast SaaS project, in reverse chronological order.
 
+## 2026-06-11 — Fix: Vercel Backend Database Connection and 500 Errors
+**What**: Added `MYSQL_URL` parsing in configuration and robust `bcrypt` exports mapping.
+**Why**: Vercel deployments were failing with a 500 error on signup because the Vercel-hosted backend couldn't connect to the MySQL database without `MYSQL_URL`/`DATABASE_URL` parsing. Additionally, `bcryptjs` CommonJS module resolution on Vercel could sometimes cause undefined `hashSync` errors. Finally, added exact error details to the 500 response JSON for easier future debugging on Vercel.
+**Files Changed**: `backend/src/config.js`, `backend/src/routes/public.js`
+**Commit**: N/A
+- Added `new URL(dbUrl)` parsing in `config.js` to extract host, port, user, pass, and db automatically from a single connection string (e.g., from Railway).
+- Added fallback `bcrypt.default?.hashSync` in `public.js` for safe ESM-to-CJS Vercel bundling.
+- Added `details: error.message` to the signup error response payload.
+
 ---
 
 ## 2026-06-10 — Fixed Dockerfile Build Error
